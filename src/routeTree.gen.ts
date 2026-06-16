@@ -15,6 +15,7 @@ import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppSubjectsRouteImport } from './routes/app.subjects'
 import { Route as AppPracticeRouteImport } from './routes/app.practice'
 import { Route as AppTopicsSubjectRouteImport } from './routes/app.topics.$subject'
+import { Route as AppQuestionIdRouteImport } from './routes/app.question.$id'
 import { Route as AppPracticeTopicRouteImport } from './routes/app.practice.$topic'
 
 const AppRoute = AppRouteImport.update({
@@ -47,6 +48,11 @@ const AppTopicsSubjectRoute = AppTopicsSubjectRouteImport.update({
   path: '/topics/$subject',
   getParentRoute: () => AppRoute,
 } as any)
+const AppQuestionIdRoute = AppQuestionIdRouteImport.update({
+  id: '/question/$id',
+  path: '/question/$id',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppPracticeTopicRoute = AppPracticeTopicRouteImport.update({
   id: '/$topic',
   path: '/$topic',
@@ -60,6 +66,7 @@ export interface FileRoutesByFullPath {
   '/app/subjects': typeof AppSubjectsRoute
   '/app/': typeof AppIndexRoute
   '/app/practice/$topic': typeof AppPracticeTopicRoute
+  '/app/question/$id': typeof AppQuestionIdRoute
   '/app/topics/$subject': typeof AppTopicsSubjectRoute
 }
 export interface FileRoutesByTo {
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/app/subjects': typeof AppSubjectsRoute
   '/app': typeof AppIndexRoute
   '/app/practice/$topic': typeof AppPracticeTopicRoute
+  '/app/question/$id': typeof AppQuestionIdRoute
   '/app/topics/$subject': typeof AppTopicsSubjectRoute
 }
 export interface FileRoutesById {
@@ -78,6 +86,7 @@ export interface FileRoutesById {
   '/app/subjects': typeof AppSubjectsRoute
   '/app/': typeof AppIndexRoute
   '/app/practice/$topic': typeof AppPracticeTopicRoute
+  '/app/question/$id': typeof AppQuestionIdRoute
   '/app/topics/$subject': typeof AppTopicsSubjectRoute
 }
 export interface FileRouteTypes {
@@ -89,6 +98,7 @@ export interface FileRouteTypes {
     | '/app/subjects'
     | '/app/'
     | '/app/practice/$topic'
+    | '/app/question/$id'
     | '/app/topics/$subject'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -97,6 +107,7 @@ export interface FileRouteTypes {
     | '/app/subjects'
     | '/app'
     | '/app/practice/$topic'
+    | '/app/question/$id'
     | '/app/topics/$subject'
   id:
     | '__root__'
@@ -106,6 +117,7 @@ export interface FileRouteTypes {
     | '/app/subjects'
     | '/app/'
     | '/app/practice/$topic'
+    | '/app/question/$id'
     | '/app/topics/$subject'
   fileRoutesById: FileRoutesById
 }
@@ -158,6 +170,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTopicsSubjectRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/question/$id': {
+      id: '/app/question/$id'
+      path: '/question/$id'
+      fullPath: '/app/question/$id'
+      preLoaderRoute: typeof AppQuestionIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/practice/$topic': {
       id: '/app/practice/$topic'
       path: '/$topic'
@@ -184,6 +203,7 @@ interface AppRouteChildren {
   AppPracticeRoute: typeof AppPracticeRouteWithChildren
   AppSubjectsRoute: typeof AppSubjectsRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppQuestionIdRoute: typeof AppQuestionIdRoute
   AppTopicsSubjectRoute: typeof AppTopicsSubjectRoute
 }
 
@@ -191,6 +211,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppPracticeRoute: AppPracticeRouteWithChildren,
   AppSubjectsRoute: AppSubjectsRoute,
   AppIndexRoute: AppIndexRoute,
+  AppQuestionIdRoute: AppQuestionIdRoute,
   AppTopicsSubjectRoute: AppTopicsSubjectRoute,
 }
 

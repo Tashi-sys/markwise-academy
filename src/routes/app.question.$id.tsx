@@ -10,7 +10,7 @@ import {
   ChevronRight,
   RotateCcw,
 } from "lucide-react";
-import { getQuestion, getTopicMeta, getQuestionsByTopic } from "../lib/questions";
+import { getQuestion, getTopicMeta, getQuestionsByTopic, type Question } from "../lib/questions";
 import { markAnswer, upgradeAnswer, type MarkResult } from "../lib/marking";
 import { recordAttempt } from "../lib/storage";
 import { z } from "zod";
@@ -194,7 +194,7 @@ function FeedbackPanel({
 }: {
   result: MarkResult;
   answer: string;
-  question: ReturnType<typeof getQuestion> & object;
+  question: Question;
   onTryAgain: () => void;
   onNext: () => void;
 }) {
