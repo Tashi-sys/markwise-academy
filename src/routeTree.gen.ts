@@ -13,6 +13,8 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppSubjectsRouteImport } from './routes/app.subjects'
+import { Route as AppReviewRouteImport } from './routes/app.review'
+import { Route as AppProgressRouteImport } from './routes/app.progress'
 import { Route as AppPracticeRouteImport } from './routes/app.practice'
 import { Route as AppTopicsSubjectRouteImport } from './routes/app.topics.$subject'
 import { Route as AppQuestionIdRouteImport } from './routes/app.question.$id'
@@ -36,6 +38,16 @@ const AppIndexRoute = AppIndexRouteImport.update({
 const AppSubjectsRoute = AppSubjectsRouteImport.update({
   id: '/subjects',
   path: '/subjects',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppReviewRoute = AppReviewRouteImport.update({
+  id: '/review',
+  path: '/review',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppProgressRoute = AppProgressRouteImport.update({
+  id: '/progress',
+  path: '/progress',
   getParentRoute: () => AppRoute,
 } as any)
 const AppPracticeRoute = AppPracticeRouteImport.update({
@@ -63,6 +75,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/app/practice': typeof AppPracticeRouteWithChildren
+  '/app/progress': typeof AppProgressRoute
+  '/app/review': typeof AppReviewRoute
   '/app/subjects': typeof AppSubjectsRoute
   '/app/': typeof AppIndexRoute
   '/app/practice/$topic': typeof AppPracticeTopicRoute
@@ -72,6 +86,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app/practice': typeof AppPracticeRouteWithChildren
+  '/app/progress': typeof AppProgressRoute
+  '/app/review': typeof AppReviewRoute
   '/app/subjects': typeof AppSubjectsRoute
   '/app': typeof AppIndexRoute
   '/app/practice/$topic': typeof AppPracticeTopicRoute
@@ -83,6 +99,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/app/practice': typeof AppPracticeRouteWithChildren
+  '/app/progress': typeof AppProgressRoute
+  '/app/review': typeof AppReviewRoute
   '/app/subjects': typeof AppSubjectsRoute
   '/app/': typeof AppIndexRoute
   '/app/practice/$topic': typeof AppPracticeTopicRoute
@@ -95,6 +113,8 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/app/practice'
+    | '/app/progress'
+    | '/app/review'
     | '/app/subjects'
     | '/app/'
     | '/app/practice/$topic'
@@ -104,6 +124,8 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/app/practice'
+    | '/app/progress'
+    | '/app/review'
     | '/app/subjects'
     | '/app'
     | '/app/practice/$topic'
@@ -114,6 +136,8 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/app/practice'
+    | '/app/progress'
+    | '/app/review'
     | '/app/subjects'
     | '/app/'
     | '/app/practice/$topic'
@@ -154,6 +178,20 @@ declare module '@tanstack/react-router' {
       path: '/subjects'
       fullPath: '/app/subjects'
       preLoaderRoute: typeof AppSubjectsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/review': {
+      id: '/app/review'
+      path: '/review'
+      fullPath: '/app/review'
+      preLoaderRoute: typeof AppReviewRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/progress': {
+      id: '/app/progress'
+      path: '/progress'
+      fullPath: '/app/progress'
+      preLoaderRoute: typeof AppProgressRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/practice': {
@@ -201,6 +239,8 @@ const AppPracticeRouteWithChildren = AppPracticeRoute._addFileChildren(
 
 interface AppRouteChildren {
   AppPracticeRoute: typeof AppPracticeRouteWithChildren
+  AppProgressRoute: typeof AppProgressRoute
+  AppReviewRoute: typeof AppReviewRoute
   AppSubjectsRoute: typeof AppSubjectsRoute
   AppIndexRoute: typeof AppIndexRoute
   AppQuestionIdRoute: typeof AppQuestionIdRoute
@@ -209,6 +249,8 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppPracticeRoute: AppPracticeRouteWithChildren,
+  AppProgressRoute: AppProgressRoute,
+  AppReviewRoute: AppReviewRoute,
   AppSubjectsRoute: AppSubjectsRoute,
   AppIndexRoute: AppIndexRoute,
   AppQuestionIdRoute: AppQuestionIdRoute,
@@ -224,3 +266,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
