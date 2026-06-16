@@ -9,38 +9,156 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppIndexRouteImport } from './routes/app.index'
+import { Route as AppSubjectsRouteImport } from './routes/app.subjects'
+import { Route as AppReviewRouteImport } from './routes/app.review'
+import { Route as AppProgressRouteImport } from './routes/app.progress'
+import { Route as AppPracticeIndexRouteImport } from './routes/app.practice.index'
+import { Route as AppTopicsSubjectRouteImport } from './routes/app.topics.$subject'
+import { Route as AppQuestionIdRouteImport } from './routes/app.question.$id'
+import { Route as AppPracticeTopicRouteImport } from './routes/app.practice.$topic'
 
+const AppRoute = AppRouteImport.update({
+  id: '/app',
+  path: '/app',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppIndexRoute = AppIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSubjectsRoute = AppSubjectsRouteImport.update({
+  id: '/subjects',
+  path: '/subjects',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppReviewRoute = AppReviewRouteImport.update({
+  id: '/review',
+  path: '/review',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppProgressRoute = AppProgressRouteImport.update({
+  id: '/progress',
+  path: '/progress',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPracticeIndexRoute = AppPracticeIndexRouteImport.update({
+  id: '/practice/',
+  path: '/practice/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTopicsSubjectRoute = AppTopicsSubjectRouteImport.update({
+  id: '/topics/$subject',
+  path: '/topics/$subject',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppQuestionIdRoute = AppQuestionIdRouteImport.update({
+  id: '/question/$id',
+  path: '/question/$id',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPracticeTopicRoute = AppPracticeTopicRouteImport.update({
+  id: '/practice/$topic',
+  path: '/practice/$topic',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/app': typeof AppRouteWithChildren
+  '/app/progress': typeof AppProgressRoute
+  '/app/review': typeof AppReviewRoute
+  '/app/subjects': typeof AppSubjectsRoute
+  '/app/': typeof AppIndexRoute
+  '/app/practice/$topic': typeof AppPracticeTopicRoute
+  '/app/question/$id': typeof AppQuestionIdRoute
+  '/app/topics/$subject': typeof AppTopicsSubjectRoute
+  '/app/practice/': typeof AppPracticeIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/app/progress': typeof AppProgressRoute
+  '/app/review': typeof AppReviewRoute
+  '/app/subjects': typeof AppSubjectsRoute
+  '/app': typeof AppIndexRoute
+  '/app/practice/$topic': typeof AppPracticeTopicRoute
+  '/app/question/$id': typeof AppQuestionIdRoute
+  '/app/topics/$subject': typeof AppTopicsSubjectRoute
+  '/app/practice': typeof AppPracticeIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/app': typeof AppRouteWithChildren
+  '/app/progress': typeof AppProgressRoute
+  '/app/review': typeof AppReviewRoute
+  '/app/subjects': typeof AppSubjectsRoute
+  '/app/': typeof AppIndexRoute
+  '/app/practice/$topic': typeof AppPracticeTopicRoute
+  '/app/question/$id': typeof AppQuestionIdRoute
+  '/app/topics/$subject': typeof AppTopicsSubjectRoute
+  '/app/practice/': typeof AppPracticeIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/app'
+    | '/app/progress'
+    | '/app/review'
+    | '/app/subjects'
+    | '/app/'
+    | '/app/practice/$topic'
+    | '/app/question/$id'
+    | '/app/topics/$subject'
+    | '/app/practice/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/app/progress'
+    | '/app/review'
+    | '/app/subjects'
+    | '/app'
+    | '/app/practice/$topic'
+    | '/app/question/$id'
+    | '/app/topics/$subject'
+    | '/app/practice'
+  id:
+    | '__root__'
+    | '/'
+    | '/app'
+    | '/app/progress'
+    | '/app/review'
+    | '/app/subjects'
+    | '/app/'
+    | '/app/practice/$topic'
+    | '/app/question/$id'
+    | '/app/topics/$subject'
+    | '/app/practice/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AppRoute: typeof AppRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/app': {
+      id: '/app'
+      path: '/app'
+      fullPath: '/app'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,22 +166,93 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/app/': {
+      id: '/app/'
+      path: '/'
+      fullPath: '/app/'
+      preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/subjects': {
+      id: '/app/subjects'
+      path: '/subjects'
+      fullPath: '/app/subjects'
+      preLoaderRoute: typeof AppSubjectsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/review': {
+      id: '/app/review'
+      path: '/review'
+      fullPath: '/app/review'
+      preLoaderRoute: typeof AppReviewRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/progress': {
+      id: '/app/progress'
+      path: '/progress'
+      fullPath: '/app/progress'
+      preLoaderRoute: typeof AppProgressRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/practice/': {
+      id: '/app/practice/'
+      path: '/practice'
+      fullPath: '/app/practice/'
+      preLoaderRoute: typeof AppPracticeIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/topics/$subject': {
+      id: '/app/topics/$subject'
+      path: '/topics/$subject'
+      fullPath: '/app/topics/$subject'
+      preLoaderRoute: typeof AppTopicsSubjectRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/question/$id': {
+      id: '/app/question/$id'
+      path: '/question/$id'
+      fullPath: '/app/question/$id'
+      preLoaderRoute: typeof AppQuestionIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/practice/$topic': {
+      id: '/app/practice/$topic'
+      path: '/practice/$topic'
+      fullPath: '/app/practice/$topic'
+      preLoaderRoute: typeof AppPracticeTopicRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
+interface AppRouteChildren {
+  AppProgressRoute: typeof AppProgressRoute
+  AppReviewRoute: typeof AppReviewRoute
+  AppSubjectsRoute: typeof AppSubjectsRoute
+  AppIndexRoute: typeof AppIndexRoute
+  AppPracticeTopicRoute: typeof AppPracticeTopicRoute
+  AppQuestionIdRoute: typeof AppQuestionIdRoute
+  AppTopicsSubjectRoute: typeof AppTopicsSubjectRoute
+  AppPracticeIndexRoute: typeof AppPracticeIndexRoute
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppProgressRoute: AppProgressRoute,
+  AppReviewRoute: AppReviewRoute,
+  AppSubjectsRoute: AppSubjectsRoute,
+  AppIndexRoute: AppIndexRoute,
+  AppPracticeTopicRoute: AppPracticeTopicRoute,
+  AppQuestionIdRoute: AppQuestionIdRoute,
+  AppTopicsSubjectRoute: AppTopicsSubjectRoute,
+  AppPracticeIndexRoute: AppPracticeIndexRoute,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AppRoute: AppRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
