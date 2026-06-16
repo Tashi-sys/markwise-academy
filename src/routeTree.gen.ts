@@ -13,6 +13,8 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppSubjectsRouteImport } from './routes/app.subjects'
+import { Route as AppPracticeRouteImport } from './routes/app.practice'
+import { Route as AppTopicsSubjectRouteImport } from './routes/app.topics.$subject'
 
 const AppRoute = AppRouteImport.update({
   id: '/app',
@@ -34,31 +36,60 @@ const AppSubjectsRoute = AppSubjectsRouteImport.update({
   path: '/subjects',
   getParentRoute: () => AppRoute,
 } as any)
+const AppPracticeRoute = AppPracticeRouteImport.update({
+  id: '/practice',
+  path: '/practice',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTopicsSubjectRoute = AppTopicsSubjectRouteImport.update({
+  id: '/topics/$subject',
+  path: '/topics/$subject',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/app/practice': typeof AppPracticeRoute
   '/app/subjects': typeof AppSubjectsRoute
   '/app/': typeof AppIndexRoute
+  '/app/topics/$subject': typeof AppTopicsSubjectRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/app/practice': typeof AppPracticeRoute
   '/app/subjects': typeof AppSubjectsRoute
   '/app': typeof AppIndexRoute
+  '/app/topics/$subject': typeof AppTopicsSubjectRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/app/practice': typeof AppPracticeRoute
   '/app/subjects': typeof AppSubjectsRoute
   '/app/': typeof AppIndexRoute
+  '/app/topics/$subject': typeof AppTopicsSubjectRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/app' | '/app/subjects' | '/app/'
+  fullPaths:
+    | '/'
+    | '/app'
+    | '/app/practice'
+    | '/app/subjects'
+    | '/app/'
+    | '/app/topics/$subject'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/app/subjects' | '/app'
-  id: '__root__' | '/' | '/app' | '/app/subjects' | '/app/'
+  to: '/' | '/app/practice' | '/app/subjects' | '/app' | '/app/topics/$subject'
+  id:
+    | '__root__'
+    | '/'
+    | '/app'
+    | '/app/practice'
+    | '/app/subjects'
+    | '/app/'
+    | '/app/topics/$subject'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -96,17 +127,35 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSubjectsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/practice': {
+      id: '/app/practice'
+      path: '/practice'
+      fullPath: '/app/practice'
+      preLoaderRoute: typeof AppPracticeRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/topics/$subject': {
+      id: '/app/topics/$subject'
+      path: '/topics/$subject'
+      fullPath: '/app/topics/$subject'
+      preLoaderRoute: typeof AppTopicsSubjectRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
+  AppPracticeRoute: typeof AppPracticeRoute
   AppSubjectsRoute: typeof AppSubjectsRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppTopicsSubjectRoute: typeof AppTopicsSubjectRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppPracticeRoute: AppPracticeRoute,
   AppSubjectsRoute: AppSubjectsRoute,
   AppIndexRoute: AppIndexRoute,
+  AppTopicsSubjectRoute: AppTopicsSubjectRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
@@ -118,3 +167,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
