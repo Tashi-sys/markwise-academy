@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { TOPICS, QUESTIONS } from "../lib/questions";
 
-export const Route = createFileRoute("/app/practice")({
+export const Route = createFileRoute("/app/practice/")({
   component: PracticeIndex,
 });
 
