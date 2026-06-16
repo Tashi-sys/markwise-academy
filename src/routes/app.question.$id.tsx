@@ -38,7 +38,7 @@ export const Route = createFileRoute("/app/question/$id")({
 });
 
 function QuestionPage() {
-  const { question } = Route.useLoaderData();
+  const { question } = Route.useLoaderData() as { question: Question };
   const { mode } = Route.useSearch();
   const navigate = useNavigate();
 
