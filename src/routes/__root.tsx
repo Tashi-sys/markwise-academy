@@ -8,6 +8,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
+import { Toaster } from "../components/ui/sonner";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -81,7 +82,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "description", content: "Lovable Generated Project" },
       { name: "author", content: "MarkWise" },
       { property: "og:title", content: "MarkWise — IGCSE Past Paper Trainer" },
-      { property: "og:description", content: "Practise IGCSE exam questions and get instant markscheme feedback." },
+      {
+        property: "og:description",
+        content: "Practise IGCSE exam questions and get instant markscheme feedback.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@MarkWise" },
@@ -107,8 +111,24 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function () {
+                try {
+                  var storedTheme = localStorage.getItem("markwise:theme") || localStorage.getItem("markwise-theme");
+                  var knownThemes = ["light", "dark", "ocean", "forest", "sunset", "midnight", "crimson-neon", "ultraviolet", "cyber-mint", "arcade-blue"];
+                  var darkThemes = ["dark", "midnight", "crimson-neon", "ultraviolet", "cyber-mint", "arcade-blue"];
+                  var theme = knownThemes.indexOf(storedTheme) >= 0 ? storedTheme : "light";
+                  document.documentElement.dataset.theme = theme;
+                  document.documentElement.classList.toggle("dark", darkThemes.indexOf(theme) >= 0);
+                } catch (_) {}
+              })();
+            `,
+          }}
+        />
         <HeadContent />
       </head>
       <body>
@@ -126,6 +146,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
+      <Toaster richColors position="top-right" />
     </QueryClientProvider>
   );
 }

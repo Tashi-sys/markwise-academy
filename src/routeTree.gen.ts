@@ -9,17 +9,39 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SignupRouteImport } from './routes/signup'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppSubjectsRouteImport } from './routes/app.subjects'
+import { Route as AppStudyNotebookRouteImport } from './routes/app.study-notebook'
 import { Route as AppReviewRouteImport } from './routes/app.review'
 import { Route as AppProgressRouteImport } from './routes/app.progress'
+import { Route as AppProfileRouteImport } from './routes/app.profile'
+import { Route as AppModelAnswersRouteImport } from './routes/app.model-answers'
+import { Route as AppMiniPaperRouteImport } from './routes/app.mini-paper'
+import { Route as AppKeywordsRouteImport } from './routes/app.keywords'
+import { Route as AppGenerateRouteImport } from './routes/app.generate'
+import { Route as AppFlashcardsRouteImport } from './routes/app.flashcards'
+import { Route as AppDashboardRouteImport } from './routes/app.dashboard'
+import { Route as AppCommonMistakesRouteImport } from './routes/app.common-mistakes'
+import { Route as AppAiTutorRouteImport } from './routes/app.ai-tutor'
 import { Route as AppPracticeIndexRouteImport } from './routes/app.practice.index'
 import { Route as AppTopicsSubjectRouteImport } from './routes/app.topics.$subject'
 import { Route as AppQuestionIdRouteImport } from './routes/app.question.$id'
-import { Route as AppPracticeTopicRouteImport } from './routes/app.practice.$topic'
+import { Route as AppPracticeSubjectTopicRouteImport } from './routes/app.practice.$subject.$topic'
 
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppRoute = AppRouteImport.update({
   id: '/app',
   path: '/app',
@@ -40,6 +62,11 @@ const AppSubjectsRoute = AppSubjectsRouteImport.update({
   path: '/subjects',
   getParentRoute: () => AppRoute,
 } as any)
+const AppStudyNotebookRoute = AppStudyNotebookRouteImport.update({
+  id: '/study-notebook',
+  path: '/study-notebook',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppReviewRoute = AppReviewRouteImport.update({
   id: '/review',
   path: '/review',
@@ -48,6 +75,51 @@ const AppReviewRoute = AppReviewRouteImport.update({
 const AppProgressRoute = AppProgressRouteImport.update({
   id: '/progress',
   path: '/progress',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppProfileRoute = AppProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppModelAnswersRoute = AppModelAnswersRouteImport.update({
+  id: '/model-answers',
+  path: '/model-answers',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMiniPaperRoute = AppMiniPaperRouteImport.update({
+  id: '/mini-paper',
+  path: '/mini-paper',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppKeywordsRoute = AppKeywordsRouteImport.update({
+  id: '/keywords',
+  path: '/keywords',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppGenerateRoute = AppGenerateRouteImport.update({
+  id: '/generate',
+  path: '/generate',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppFlashcardsRoute = AppFlashcardsRouteImport.update({
+  id: '/flashcards',
+  path: '/flashcards',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDashboardRoute = AppDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCommonMistakesRoute = AppCommonMistakesRouteImport.update({
+  id: '/common-mistakes',
+  path: '/common-mistakes',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAiTutorRoute = AppAiTutorRouteImport.update({
+  id: '/ai-tutor',
+  path: '/ai-tutor',
   getParentRoute: () => AppRoute,
 } as any)
 const AppPracticeIndexRoute = AppPracticeIndexRouteImport.update({
@@ -65,93 +137,181 @@ const AppQuestionIdRoute = AppQuestionIdRouteImport.update({
   path: '/question/$id',
   getParentRoute: () => AppRoute,
 } as any)
-const AppPracticeTopicRoute = AppPracticeTopicRouteImport.update({
-  id: '/practice/$topic',
-  path: '/practice/$topic',
+const AppPracticeSubjectTopicRoute = AppPracticeSubjectTopicRouteImport.update({
+  id: '/practice/$subject/$topic',
+  path: '/practice/$subject/$topic',
   getParentRoute: () => AppRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
+  '/app/ai-tutor': typeof AppAiTutorRoute
+  '/app/common-mistakes': typeof AppCommonMistakesRoute
+  '/app/dashboard': typeof AppDashboardRoute
+  '/app/flashcards': typeof AppFlashcardsRoute
+  '/app/generate': typeof AppGenerateRoute
+  '/app/keywords': typeof AppKeywordsRoute
+  '/app/mini-paper': typeof AppMiniPaperRoute
+  '/app/model-answers': typeof AppModelAnswersRoute
+  '/app/profile': typeof AppProfileRoute
   '/app/progress': typeof AppProgressRoute
   '/app/review': typeof AppReviewRoute
+  '/app/study-notebook': typeof AppStudyNotebookRoute
   '/app/subjects': typeof AppSubjectsRoute
   '/app/': typeof AppIndexRoute
-  '/app/practice/$topic': typeof AppPracticeTopicRoute
   '/app/question/$id': typeof AppQuestionIdRoute
   '/app/topics/$subject': typeof AppTopicsSubjectRoute
   '/app/practice/': typeof AppPracticeIndexRoute
+  '/app/practice/$subject/$topic': typeof AppPracticeSubjectTopicRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
+  '/app/ai-tutor': typeof AppAiTutorRoute
+  '/app/common-mistakes': typeof AppCommonMistakesRoute
+  '/app/dashboard': typeof AppDashboardRoute
+  '/app/flashcards': typeof AppFlashcardsRoute
+  '/app/generate': typeof AppGenerateRoute
+  '/app/keywords': typeof AppKeywordsRoute
+  '/app/mini-paper': typeof AppMiniPaperRoute
+  '/app/model-answers': typeof AppModelAnswersRoute
+  '/app/profile': typeof AppProfileRoute
   '/app/progress': typeof AppProgressRoute
   '/app/review': typeof AppReviewRoute
+  '/app/study-notebook': typeof AppStudyNotebookRoute
   '/app/subjects': typeof AppSubjectsRoute
   '/app': typeof AppIndexRoute
-  '/app/practice/$topic': typeof AppPracticeTopicRoute
   '/app/question/$id': typeof AppQuestionIdRoute
   '/app/topics/$subject': typeof AppTopicsSubjectRoute
   '/app/practice': typeof AppPracticeIndexRoute
+  '/app/practice/$subject/$topic': typeof AppPracticeSubjectTopicRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
+  '/app/ai-tutor': typeof AppAiTutorRoute
+  '/app/common-mistakes': typeof AppCommonMistakesRoute
+  '/app/dashboard': typeof AppDashboardRoute
+  '/app/flashcards': typeof AppFlashcardsRoute
+  '/app/generate': typeof AppGenerateRoute
+  '/app/keywords': typeof AppKeywordsRoute
+  '/app/mini-paper': typeof AppMiniPaperRoute
+  '/app/model-answers': typeof AppModelAnswersRoute
+  '/app/profile': typeof AppProfileRoute
   '/app/progress': typeof AppProgressRoute
   '/app/review': typeof AppReviewRoute
+  '/app/study-notebook': typeof AppStudyNotebookRoute
   '/app/subjects': typeof AppSubjectsRoute
   '/app/': typeof AppIndexRoute
-  '/app/practice/$topic': typeof AppPracticeTopicRoute
   '/app/question/$id': typeof AppQuestionIdRoute
   '/app/topics/$subject': typeof AppTopicsSubjectRoute
   '/app/practice/': typeof AppPracticeIndexRoute
+  '/app/practice/$subject/$topic': typeof AppPracticeSubjectTopicRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/app'
+    | '/login'
+    | '/signup'
+    | '/app/ai-tutor'
+    | '/app/common-mistakes'
+    | '/app/dashboard'
+    | '/app/flashcards'
+    | '/app/generate'
+    | '/app/keywords'
+    | '/app/mini-paper'
+    | '/app/model-answers'
+    | '/app/profile'
     | '/app/progress'
     | '/app/review'
+    | '/app/study-notebook'
     | '/app/subjects'
     | '/app/'
-    | '/app/practice/$topic'
     | '/app/question/$id'
     | '/app/topics/$subject'
     | '/app/practice/'
+    | '/app/practice/$subject/$topic'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/login'
+    | '/signup'
+    | '/app/ai-tutor'
+    | '/app/common-mistakes'
+    | '/app/dashboard'
+    | '/app/flashcards'
+    | '/app/generate'
+    | '/app/keywords'
+    | '/app/mini-paper'
+    | '/app/model-answers'
+    | '/app/profile'
     | '/app/progress'
     | '/app/review'
+    | '/app/study-notebook'
     | '/app/subjects'
     | '/app'
-    | '/app/practice/$topic'
     | '/app/question/$id'
     | '/app/topics/$subject'
     | '/app/practice'
+    | '/app/practice/$subject/$topic'
   id:
     | '__root__'
     | '/'
     | '/app'
+    | '/login'
+    | '/signup'
+    | '/app/ai-tutor'
+    | '/app/common-mistakes'
+    | '/app/dashboard'
+    | '/app/flashcards'
+    | '/app/generate'
+    | '/app/keywords'
+    | '/app/mini-paper'
+    | '/app/model-answers'
+    | '/app/profile'
     | '/app/progress'
     | '/app/review'
+    | '/app/study-notebook'
     | '/app/subjects'
     | '/app/'
-    | '/app/practice/$topic'
     | '/app/question/$id'
     | '/app/topics/$subject'
     | '/app/practice/'
+    | '/app/practice/$subject/$topic'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
+  LoginRoute: typeof LoginRoute
+  SignupRoute: typeof SignupRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app': {
       id: '/app'
       path: '/app'
@@ -180,6 +340,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSubjectsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/study-notebook': {
+      id: '/app/study-notebook'
+      path: '/study-notebook'
+      fullPath: '/app/study-notebook'
+      preLoaderRoute: typeof AppStudyNotebookRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/review': {
       id: '/app/review'
       path: '/review'
@@ -192,6 +359,69 @@ declare module '@tanstack/react-router' {
       path: '/progress'
       fullPath: '/app/progress'
       preLoaderRoute: typeof AppProgressRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/profile': {
+      id: '/app/profile'
+      path: '/profile'
+      fullPath: '/app/profile'
+      preLoaderRoute: typeof AppProfileRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/model-answers': {
+      id: '/app/model-answers'
+      path: '/model-answers'
+      fullPath: '/app/model-answers'
+      preLoaderRoute: typeof AppModelAnswersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/mini-paper': {
+      id: '/app/mini-paper'
+      path: '/mini-paper'
+      fullPath: '/app/mini-paper'
+      preLoaderRoute: typeof AppMiniPaperRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/keywords': {
+      id: '/app/keywords'
+      path: '/keywords'
+      fullPath: '/app/keywords'
+      preLoaderRoute: typeof AppKeywordsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/generate': {
+      id: '/app/generate'
+      path: '/generate'
+      fullPath: '/app/generate'
+      preLoaderRoute: typeof AppGenerateRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/flashcards': {
+      id: '/app/flashcards'
+      path: '/flashcards'
+      fullPath: '/app/flashcards'
+      preLoaderRoute: typeof AppFlashcardsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/dashboard': {
+      id: '/app/dashboard'
+      path: '/dashboard'
+      fullPath: '/app/dashboard'
+      preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/common-mistakes': {
+      id: '/app/common-mistakes'
+      path: '/common-mistakes'
+      fullPath: '/app/common-mistakes'
+      preLoaderRoute: typeof AppCommonMistakesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/ai-tutor': {
+      id: '/app/ai-tutor'
+      path: '/ai-tutor'
+      fullPath: '/app/ai-tutor'
+      preLoaderRoute: typeof AppAiTutorRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/practice/': {
@@ -215,36 +445,56 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppQuestionIdRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/practice/$topic': {
-      id: '/app/practice/$topic'
-      path: '/practice/$topic'
-      fullPath: '/app/practice/$topic'
-      preLoaderRoute: typeof AppPracticeTopicRouteImport
+    '/app/practice/$subject/$topic': {
+      id: '/app/practice/$subject/$topic'
+      path: '/practice/$subject/$topic'
+      fullPath: '/app/practice/$subject/$topic'
+      preLoaderRoute: typeof AppPracticeSubjectTopicRouteImport
       parentRoute: typeof AppRoute
     }
   }
 }
 
 interface AppRouteChildren {
+  AppAiTutorRoute: typeof AppAiTutorRoute
+  AppCommonMistakesRoute: typeof AppCommonMistakesRoute
+  AppDashboardRoute: typeof AppDashboardRoute
+  AppFlashcardsRoute: typeof AppFlashcardsRoute
+  AppGenerateRoute: typeof AppGenerateRoute
+  AppKeywordsRoute: typeof AppKeywordsRoute
+  AppMiniPaperRoute: typeof AppMiniPaperRoute
+  AppModelAnswersRoute: typeof AppModelAnswersRoute
+  AppProfileRoute: typeof AppProfileRoute
   AppProgressRoute: typeof AppProgressRoute
   AppReviewRoute: typeof AppReviewRoute
+  AppStudyNotebookRoute: typeof AppStudyNotebookRoute
   AppSubjectsRoute: typeof AppSubjectsRoute
   AppIndexRoute: typeof AppIndexRoute
-  AppPracticeTopicRoute: typeof AppPracticeTopicRoute
   AppQuestionIdRoute: typeof AppQuestionIdRoute
   AppTopicsSubjectRoute: typeof AppTopicsSubjectRoute
   AppPracticeIndexRoute: typeof AppPracticeIndexRoute
+  AppPracticeSubjectTopicRoute: typeof AppPracticeSubjectTopicRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAiTutorRoute: AppAiTutorRoute,
+  AppCommonMistakesRoute: AppCommonMistakesRoute,
+  AppDashboardRoute: AppDashboardRoute,
+  AppFlashcardsRoute: AppFlashcardsRoute,
+  AppGenerateRoute: AppGenerateRoute,
+  AppKeywordsRoute: AppKeywordsRoute,
+  AppMiniPaperRoute: AppMiniPaperRoute,
+  AppModelAnswersRoute: AppModelAnswersRoute,
+  AppProfileRoute: AppProfileRoute,
   AppProgressRoute: AppProgressRoute,
   AppReviewRoute: AppReviewRoute,
+  AppStudyNotebookRoute: AppStudyNotebookRoute,
   AppSubjectsRoute: AppSubjectsRoute,
   AppIndexRoute: AppIndexRoute,
-  AppPracticeTopicRoute: AppPracticeTopicRoute,
   AppQuestionIdRoute: AppQuestionIdRoute,
   AppTopicsSubjectRoute: AppTopicsSubjectRoute,
   AppPracticeIndexRoute: AppPracticeIndexRoute,
+  AppPracticeSubjectTopicRoute: AppPracticeSubjectTopicRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
@@ -252,7 +502,19 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
+  LoginRoute: LoginRoute,
+  SignupRoute: SignupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

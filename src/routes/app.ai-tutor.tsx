@@ -1,0 +1,813 @@
+import { createFileRoute } from "@tanstack/react-router";
+import type { ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Bot, MessageCircle, Plus, Send, Settings, Sparkles, User } from "lucide-react";
+import { askAITutor, getAISettingsStatus } from "../lib/api/ai-tutor.functions";
+import { getExamBoard, getSubjectName, getSubjectsForBoard } from "../data/syllabusConfig";
+import { getMiniPaperSyllabus } from "../data/miniPaperConfig";
+import { useAuth } from "../lib/auth";
+import { useAttempts } from "../lib/storage";
+
+export const Route = createFileRoute("/app/ai-tutor")({
+  component: AITutorPage,
+});
+
+type TutorMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+type TutorChat = {
+  id: string;
+  title: string;
+  mode: string;
+  messages: TutorMessage[];
+  updatedAt: number;
+};
+
+const CHAT_KEY = "markwise:ai-tutor-chats:v1";
+const LEGACY_CHAT_KEYS = [
+  "aiTutorMessages",
+  "tutorHistory",
+  "chatMessages",
+  "defaultTutorMessage",
+  "seededMessages",
+];
+const MODES = [
+  "General Tutor",
+  "Mark My Answer",
+  "Upgrade My Answer",
+  "Explain Topic",
+  "Generate Question",
+  "Mini Paper Coach",
+  "Weak Topic Coach",
+];
+const NEUTRAL_STARTER =
+  "Hi! I'm your MarkWise AI Tutor. Ask me to mark an answer, explain a topic, give keywords, or make a model answer.";
+const BAD_BIOLOGY_SEED_PATTERN =
+  /(cambridge igcse biology|biology paper 1|ecology weak topic|weak topic|aiming 8\/9|mcq-focused|food chains|population sampling|rapid-fire definitions|exam technique for paper 1 ecology)/i;
+
+function AITutorPage() {
+  const { user } = useAuth();
+  const { attempts } = useAttempts();
+  const [chats, setChats] = useState<TutorChat[]>(() => readChats());
+  const [activeId, setActiveId] = useState(() => chats[0]?.id ?? "");
+  const [mode, setMode] = useState(MODES[0]);
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
+  const [selectedTopic, setSelectedTopic] = useState("");
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [settings, setSettings] = useState<Awaited<ReturnType<typeof getAISettingsStatus>> | null>(
+    null,
+  );
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  const activeChat = chats.find((chat) => chat.id === activeId) ?? chats[0];
+  const selectedSubjectName =
+    user && selectedSubject ? getSubjectName(user.examBoard, selectedSubject) : null;
+  const mentionedSubject = inferSubjectFromMessage(message);
+  const subjectForContext = selectedSubjectName ?? mentionedSubject;
+  const syllabus =
+    user && selectedSubject ? getMiniPaperSyllabus(selectedSubject, user.examBoard) : undefined;
+  const board = user ? getExamBoard(user.examBoard) : undefined;
+  const weakTopics = useMemo(() => {
+    const low = attempts
+      .filter((attempt) => attempt.score / Math.max(1, attempt.total) < 0.65)
+      .map((attempt) => attempt.topic);
+    return [...new Set(low)].slice(0, 5);
+  }, [attempts]);
+
+  useEffect(() => {
+    saveChats(chats);
+  }, [chats]);
+
+  useEffect(() => {
+    clearLegacyTutorSeeds();
+    setChats((items) => scrubBadTutorSeeds(items));
+  }, []);
+
+  useEffect(() => {
+    getAISettingsStatus().then(setSettings);
+  }, []);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [activeChat?.messages, loading]);
+
+  if (!user) return null;
+
+  const ensureChat = () => {
+    if (activeChat) return activeChat;
+    const chat = newChat(mode);
+    setChats([chat]);
+    setActiveId(chat.id);
+    return chat;
+  };
+
+  const sendMessage = async () => {
+    const text = message.trim();
+    if (!text || loading) return;
+    const chat = ensureChat();
+    const userMessage: TutorMessage = { role: "user", content: text };
+    const nextMessages = [...chat.messages, userMessage];
+    setMessage("");
+    setLoading(true);
+    updateChat(chat.id, { messages: nextMessages, title: titleFrom(text), mode });
+
+    const intent = detectTutorIntent(text, mode);
+    const localReply = getLocalTutorReply({
+      intent,
+      text,
+      selectedSubject: subjectForContext,
+      selectedTopic: selectedTopic.trim() || inferTopicFromMessage(text),
+    });
+    if (localReply) {
+      updateChat(chat.id, {
+        messages: [...nextMessages, { role: "assistant", content: localReply }],
+        updatedAt: Date.now(),
+      });
+      setLoading(false);
+      return;
+    }
+
+    const response = await askAITutor({
+      data: {
+        mode,
+        selectedTutorMode: mode,
+        userMessage: text,
+        message: text,
+        intent,
+        chatHistory: nextMessages.slice(-10),
+        studentProfile: {
+          examBoard: board?.name ?? user.examBoard,
+          subject: subjectForContext ?? undefined,
+          paper: subjectForContext ? syllabus?.papers[0]?.label : undefined,
+          targetGrade: user.targetGrade,
+          userProfileSubjects: user.selectedSubjects.map((subject) =>
+            getSubjectName(user.examBoard, subject),
+          ),
+          weakTopics: shouldUseWeakTopics(intent, mode) ? weakTopics : [],
+        },
+        tutorContext: {
+          selectedTutorMode: mode,
+          selectedExamBoard: board?.name ?? user.examBoard,
+          selectedSubject: subjectForContext,
+          selectedTopic: selectedTopic.trim() || inferTopicFromMessage(text) || null,
+          userProfileSubjects: user.selectedSubjects.map((subject) =>
+            getSubjectName(user.examBoard, subject),
+          ),
+          recentAttemptContext: shouldUseWeakTopics(intent, mode) ? { weakTopics } : {},
+        },
+        currentQuestionContext: {
+          topic: selectedTopic.trim() || inferTopicFromMessage(text) || undefined,
+        },
+      },
+    });
+
+    updateChat(chat.id, {
+      messages: [...nextMessages, { role: "assistant", content: response.reply }],
+      updatedAt: Date.now(),
+    });
+    setLoading(false);
+  };
+
+  const updateChat = (id: string, patch: Partial<TutorChat>) => {
+    setChats((items) =>
+      items.map((item) => (item.id === id ? { ...item, ...patch, updatedAt: Date.now() } : item)),
+    );
+  };
+
+  const createChat = () => {
+    const chat = newChat(mode);
+    setChats((items) => [chat, ...items]);
+    setActiveId(chat.id);
+  };
+
+  return (
+    <div className="ai-tutor-shell animate-enter grid gap-5 lg:grid-cols-[260px_1fr]">
+      <aside className="glass-card animate-panel-left rounded-2xl border border-border bg-card p-4 shadow-soft">
+        <button
+          type="button"
+          onClick={createChat}
+          className="interactive-button tutor-new-chat-button flex w-full items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-glow"
+        >
+          <Plus className="h-4 w-4" />
+          New chat
+        </button>
+        <div className="mt-4 space-y-2">
+          {chats.map((chat) => (
+            <button
+              key={chat.id}
+              type="button"
+              onClick={() => {
+                setActiveId(chat.id);
+                setMode(chat.mode);
+              }}
+              className={`tutor-chat-row w-full rounded-xl px-3 py-2 text-left text-sm ${
+                chat.id === activeChat?.id
+                  ? "is-active bg-primary/10 text-primary"
+                  : "hover:bg-secondary"
+              }`}
+            >
+              <div className="truncate font-medium">{chat.title}</div>
+              <div className="text-[10px] text-muted-foreground">{chat.mode}</div>
+            </button>
+          ))}
+        </div>
+      </aside>
+
+      <main className="space-y-5">
+        <div className="tutor-hero animate-enter-delay-1">
+          <div>
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+              <Sparkles className="h-3.5 w-3.5 animate-sparkle-twinkle" />
+              Live exam coach
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight">AI Tutor</h1>
+            <p className="mt-1 text-muted-foreground">
+              GPT-powered IGCSE help for marking, keywords, model answers, and revision coaching.
+            </p>
+          </div>
+          <div className="hidden items-center gap-3 rounded-2xl border border-border bg-card/70 px-4 py-3 shadow-soft backdrop-blur md:flex">
+            <div className="grid h-10 w-10 place-items-center rounded-full bg-primary/10 text-primary">
+              <MessageCircle className="h-5 w-5 animate-pulse-soft" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold">Ready when you are</div>
+              <div className="text-xs text-muted-foreground">Ask, mark, improve, repeat.</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card tutor-control-panel animate-enter-delay-2 rounded-2xl border border-border bg-card p-4 shadow-soft">
+          <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]">
+            <label className="tutor-field text-sm font-medium">
+              Tutor mode
+              <select
+                value={mode}
+                onChange={(event) => setMode(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-input bg-background px-3 py-2"
+              >
+                {MODES.map((item) => (
+                  <option key={item}>{item}</option>
+                ))}
+              </select>
+            </label>
+            <label className="tutor-field text-sm font-medium">
+              Subject
+              <select
+                value={selectedSubject ?? ""}
+                onChange={(event) => setSelectedSubject(event.target.value || null)}
+                className="mt-2 w-full rounded-xl border border-input bg-background px-3 py-2"
+              >
+                <option value="">No subject selected</option>
+                {getSubjectsForBoard(user.examBoard).map((subject) => (
+                  <option key={subject.id} value={subject.id}>
+                    {subject.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="tutor-field text-sm font-medium">
+              Topic
+              <input
+                value={selectedTopic}
+                onChange={(event) => setSelectedTopic(event.target.value)}
+                placeholder="Optional topic"
+                className="mt-2 w-full rounded-xl border border-input bg-background px-3 py-2"
+              />
+            </label>
+            <div className="tutor-settings-card rounded-xl border border-border bg-secondary/30 p-3 text-sm">
+              <div className="flex items-center gap-2 font-semibold">
+                <Settings className="h-4 w-4" />
+                AI Settings
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                GPT API: {settings?.connected ? "Connected" : "Not connected"}
+              </div>
+              <div className="text-xs text-muted-foreground">Model: {settings?.model ?? "..."}</div>
+              {!settings?.connected && (
+                <div className="mt-1 text-xs text-warning">OPENAI_API_KEY is missing.</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <section className="glass-card tutor-chat-panel flex min-h-[520px] flex-col rounded-2xl border border-border bg-card shadow-soft md:min-h-[620px]">
+          <div className="flex-1 space-y-4 overflow-y-auto scroll-smooth p-3 sm:p-4">
+            {(activeChat?.messages ?? []).length === 0 && (
+              <div className="grid h-full place-items-center text-center">
+                <div className="tutor-empty-state max-w-md rounded-2xl border border-border bg-background/80 p-5 text-sm leading-relaxed text-muted-foreground shadow-soft">
+                  <div className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-full bg-primary/10 text-primary">
+                    <Bot className="h-5 w-5 animate-float-icon" />
+                  </div>
+                  <div>{NEUTRAL_STARTER}</div>
+                </div>
+              </div>
+            )}
+            {activeChat?.messages.map((item, index) => (
+              <div
+                key={`${item.role}-${index}`}
+                className={`animate-message-in tutor-message-row flex gap-3 ${
+                  item.role === "user" ? "justify-end" : "justify-start"
+                }`}
+                style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }}
+              >
+                {item.role === "assistant" && (
+                  <div className="tutor-avatar grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                    <Bot className="h-4 w-4" />
+                  </div>
+                )}
+                <div
+                  className={`tutor-message-bubble max-w-[92%] rounded-2xl px-4 py-3 text-sm leading-relaxed sm:max-w-[75%] ${
+                    item.role === "user"
+                      ? "tutor-message-user bg-primary text-primary-foreground"
+                      : "tutor-message-assistant border border-border bg-background text-foreground shadow-soft"
+                  }`}
+                >
+                  {item.role === "assistant" ? (
+                    <TutorMarkdown content={item.content} mode={mode} />
+                  ) : (
+                    item.content
+                  )}
+                </div>
+                {item.role === "user" && (
+                  <div className="tutor-avatar grid h-8 w-8 shrink-0 place-items-center rounded-full bg-secondary text-muted-foreground">
+                    <User className="h-4 w-4" />
+                  </div>
+                )}
+              </div>
+            ))}
+            {loading && (
+              <div className="animate-message-in flex items-center gap-3 text-sm text-muted-foreground">
+                <div className="tutor-avatar grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                  <Bot className="h-4 w-4 animate-pulse-soft" />
+                </div>
+                <div className="tutor-thinking-card flex items-center gap-3 rounded-2xl border border-border bg-background px-4 py-3 shadow-soft">
+                  <span>AI Tutor is thinking</span>
+                  <span className="typing-dots" aria-hidden="true">
+                    <span />
+                    <span />
+                    <span />
+                  </span>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+          <div className="tutor-input-dock sticky bottom-0 border-t border-border bg-card/95 p-3 backdrop-blur sm:p-4">
+            <div className="flex gap-2 sm:gap-3">
+              <textarea
+                value={message}
+                onChange={(event) => setMessage(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    sendMessage();
+                  }
+                }}
+                rows={2}
+                placeholder="Ask the AI Tutor..."
+                className="tutor-composer min-h-12 flex-1 resize-none rounded-2xl border border-input bg-background px-4 py-3 text-sm outline-none ring-primary/30 focus:ring-2"
+              />
+              <button
+                type="button"
+                onClick={sendMessage}
+                disabled={loading || !message.trim()}
+                className="interactive-button tutor-send-button grid h-12 w-12 place-items-center rounded-full bg-primary text-primary-foreground shadow-glow disabled:opacity-50"
+              >
+                <Send className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+function newChat(mode: string): TutorChat {
+  return {
+    id: crypto.randomUUID(),
+    title: "New tutor chat",
+    mode,
+    messages: [],
+    updatedAt: Date.now(),
+  };
+}
+
+function titleFrom(message: string) {
+  return message.length > 34 ? `${message.slice(0, 34)}...` : message;
+}
+
+function TutorMarkdown({ content, mode }: { content: string; mode: string }) {
+  const blocks = parseMarkdownBlocks(content);
+  return (
+    <div className="tutor-markdown">
+      <ModeBadge mode={mode} />
+      {blocks.map((block, index) => renderMarkdownBlock(block, index))}
+    </div>
+  );
+}
+
+function ModeBadge({ mode }: { mode: string }) {
+  const label =
+    mode === "Mark My Answer"
+      ? "Marking"
+      : mode === "Upgrade My Answer"
+        ? "Model upgrade"
+        : mode === "Weak Topic Coach"
+          ? "Revision coach"
+          : mode;
+  return (
+    <div className="tutor-mode-badge mb-3 inline-flex rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+      {label}
+    </div>
+  );
+}
+
+type MarkdownBlock =
+  | { type: "heading"; level: number; text: string }
+  | { type: "paragraph"; text: string }
+  | { type: "list"; ordered: boolean; items: string[] }
+  | { type: "code"; text: string }
+  | { type: "blockquote"; text: string }
+  | { type: "hr" }
+  | { type: "table"; rows: string[][] };
+
+function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  const blocks: MarkdownBlock[] = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index];
+    const trimmed = line.trim();
+    if (!trimmed) {
+      index += 1;
+      continue;
+    }
+
+    if (trimmed.startsWith("```")) {
+      const codeLines: string[] = [];
+      index += 1;
+      while (index < lines.length && !lines[index].trim().startsWith("```")) {
+        codeLines.push(lines[index]);
+        index += 1;
+      }
+      blocks.push({ type: "code", text: codeLines.join("\n") });
+      index += 1;
+      continue;
+    }
+
+    const heading = /^(#{2,4})\s+(.+)$/.exec(trimmed);
+    if (heading) {
+      blocks.push({ type: "heading", level: heading[1].length, text: heading[2] });
+      index += 1;
+      continue;
+    }
+
+    if (/^---+$/.test(trimmed)) {
+      blocks.push({ type: "hr" });
+      index += 1;
+      continue;
+    }
+
+    if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
+      const tableLines: string[] = [];
+      while (
+        index < lines.length &&
+        lines[index].trim().startsWith("|") &&
+        lines[index].trim().endsWith("|")
+      ) {
+        tableLines.push(lines[index].trim());
+        index += 1;
+      }
+      blocks.push({
+        type: "table",
+        rows: tableLines
+          .filter((row) => !/^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(row))
+          .map((row) =>
+            row
+              .replace(/^\||\|$/g, "")
+              .split("|")
+              .map((cell) => cell.trim()),
+          ),
+      });
+      continue;
+    }
+
+    if (trimmed.startsWith(">")) {
+      const quoteLines: string[] = [];
+      while (index < lines.length && lines[index].trim().startsWith(">")) {
+        quoteLines.push(lines[index].trim().replace(/^>\s?/, ""));
+        index += 1;
+      }
+      blocks.push({ type: "blockquote", text: quoteLines.join("\n") });
+      continue;
+    }
+
+    if (/^([-*])\s+/.test(trimmed) || /^\d+\.\s+/.test(trimmed)) {
+      const ordered = /^\d+\.\s+/.test(trimmed);
+      const items: string[] = [];
+      while (
+        index < lines.length &&
+        (ordered ? /^\d+\.\s+/.test(lines[index].trim()) : /^[-*]\s+/.test(lines[index].trim()))
+      ) {
+        items.push(lines[index].trim().replace(ordered ? /^\d+\.\s+/ : /^[-*]\s+/, ""));
+        index += 1;
+      }
+      blocks.push({ type: "list", ordered, items });
+      continue;
+    }
+
+    const paragraphLines: string[] = [];
+    while (index < lines.length && lines[index].trim()) {
+      const next = lines[index].trim();
+      if (
+        /^(#{2,4})\s+/.test(next) ||
+        next.startsWith("```") ||
+        next.startsWith(">") ||
+        /^([-*])\s+/.test(next) ||
+        /^\d+\.\s+/.test(next) ||
+        (next.startsWith("|") && next.endsWith("|"))
+      ) {
+        break;
+      }
+      paragraphLines.push(next);
+      index += 1;
+    }
+    blocks.push({ type: "paragraph", text: paragraphLines.join("\n") });
+  }
+
+  return blocks.length > 0 ? blocks : [{ type: "paragraph", text: markdown }];
+}
+
+function renderMarkdownBlock(block: MarkdownBlock, index: number) {
+  if (block.type === "heading") {
+    const className =
+      block.level === 2
+        ? "mt-4 text-base font-bold text-foreground first:mt-0"
+        : "mt-3 text-sm font-bold text-foreground";
+    return (
+      <h3 key={index} className={`tutor-markdown-block ${className}`}>
+        {renderInlineMarkdown(block.text)}
+      </h3>
+    );
+  }
+  if (block.type === "paragraph") {
+    const callout = getCalloutKind(block.text);
+    if (callout) {
+      return (
+        <div
+          key={index}
+          className={`tutor-markdown-block tutor-callout tutor-callout-${callout.kind}`}
+        >
+          <div className="text-xs font-bold uppercase tracking-wide">{callout.title}</div>
+          <p className="mt-1">{renderInlineMarkdown(callout.body)}</p>
+        </div>
+      );
+    }
+    return (
+      <p key={index} className="mt-2 whitespace-pre-line leading-7 text-foreground/90 first:mt-0">
+        {renderInlineMarkdown(block.text)}
+      </p>
+    );
+  }
+  if (block.type === "list") {
+    const ListTag = block.ordered ? "ol" : "ul";
+    return (
+      <ListTag
+        key={index}
+        className={`tutor-markdown-block mt-3 space-y-1.5 pl-5 leading-7 ${
+          block.ordered ? "list-decimal" : "list-disc"
+        }`}
+      >
+        {block.items.map((item) => (
+          <li key={item}>{renderInlineMarkdown(item)}</li>
+        ))}
+      </ListTag>
+    );
+  }
+  if (block.type === "code") {
+    return (
+      <pre key={index} className="mt-3 overflow-x-auto rounded-xl bg-secondary/60 p-3 text-xs">
+        <code>{block.text}</code>
+      </pre>
+    );
+  }
+  if (block.type === "blockquote") {
+    const callout = getCalloutKind(block.text);
+    return (
+      <blockquote
+        key={index}
+        className={`mt-3 rounded-xl border-l-4 p-3 leading-7 ${
+          callout
+            ? `tutor-callout tutor-callout-${callout.kind}`
+            : "border-primary bg-primary/5 text-foreground"
+        }`}
+      >
+        {callout ? (
+          <>
+            <div className="text-xs font-bold uppercase tracking-wide">{callout.title}</div>
+            <p className="mt-1">{renderInlineMarkdown(callout.body)}</p>
+          </>
+        ) : (
+          renderInlineMarkdown(block.text)
+        )}
+      </blockquote>
+    );
+  }
+  if (block.type === "table") {
+    return (
+      <div key={index} className="mt-3 overflow-x-auto rounded-xl border border-border">
+        <table className="w-full border-collapse text-left text-xs">
+          <tbody>
+            {block.rows.map((row, rowIndex) => (
+              <tr
+                key={`${row.join("-")}-${rowIndex}`}
+                className="border-b border-border last:border-0"
+              >
+                {row.map((cell, cellIndex) => (
+                  <td
+                    key={`${cell}-${cellIndex}`}
+                    className={`p-2 ${rowIndex === 0 ? "bg-secondary/50 font-semibold" : ""}`}
+                  >
+                    {renderInlineMarkdown(cell)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+  return <hr key={index} className="my-4 border-border" />;
+}
+
+function renderInlineMarkdown(text: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const pattern = /(\*\*[^*]+\*\*|`[^`]+`)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text))) {
+    if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index));
+    const token = match[0];
+    if (token.startsWith("**")) {
+      nodes.push(
+        <strong key={`${token}-${match.index}`} className="font-bold text-foreground">
+          {token.slice(2, -2)}
+        </strong>,
+      );
+    } else {
+      nodes.push(
+        <code
+          key={`${token}-${match.index}`}
+          className="rounded-md bg-secondary px-1.5 py-0.5 text-xs"
+        >
+          {token.slice(1, -1)}
+        </code>,
+      );
+    }
+    lastIndex = match.index + token.length;
+  }
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+  return nodes;
+}
+
+function getCalloutKind(text: string) {
+  const cleaned = text.replace(/\*\*/g, "").trim();
+  const [rawTitle, ...rest] = cleaned.split(/:\s*/);
+  const title = rawTitle.toLowerCase();
+  const body = rest.join(": ").trim() || cleaned;
+  if (/exam keywords?|key words?/.test(title)) {
+    return { kind: "keywords", title: "Exam keywords", body };
+  }
+  if (/common mistake/.test(title)) return { kind: "mistake", title: "Common mistake", body };
+  if (/grade 9|full[-\s]?mark wording|examiner wording/.test(title)) {
+    return { kind: "grade", title: "Grade 9 wording", body };
+  }
+  if (/quick check/.test(title)) return { kind: "check", title: "Quick check", body };
+  return null;
+}
+
+type TutorIntent =
+  | "greeting"
+  | "general"
+  | "subject-specific"
+  | "marking"
+  | "model-answer"
+  | "keyword"
+  | "revision-coaching";
+
+function detectTutorIntent(message: string, mode: string): TutorIntent {
+  const text = message.trim().toLowerCase();
+  if (/^(hello|hi|hey|yo|sup|good morning|good afternoon|good evening)[!.?\s]*$/i.test(text)) {
+    return "greeting";
+  }
+  if (/mark|grade|score|how many marks/.test(text) || mode === "Mark My Answer") return "marking";
+  if (/model answer|sample answer|full[-\s]?mark answer/.test(text)) return "model-answer";
+  if (/keyword|key word|definition/.test(text)) return "keyword";
+  if (/revise|revision|plan|coach|weak|recommend/.test(text) || mode === "Weak Topic Coach") {
+    return "revision-coaching";
+  }
+  if (inferSubjectFromMessage(message) || inferTopicFromMessage(message)) return "subject-specific";
+  return "general";
+}
+
+function getLocalTutorReply({
+  intent,
+  text,
+  selectedSubject,
+  selectedTopic,
+}: {
+  intent: TutorIntent;
+  text: string;
+  selectedSubject: string | null;
+  selectedTopic: string | null;
+}) {
+  if (intent === "greeting") {
+    return "Hey! What subject or question do you want help with today?";
+  }
+  if (intent === "marking" && !selectedSubject) {
+    return "Sure. Send me the subject, question, total marks, mark scheme if you have it, and your answer. Then I can mark it properly.";
+  }
+  if (intent === "general" && !selectedSubject && !inferSubjectFromMessage(text)) {
+    return "What subject or topic do you want help with? You can choose a subject above or type something like 'Help me with electrolysis'.";
+  }
+  if (!selectedSubject && !inferSubjectFromMessage(text) && !selectedTopic) {
+    return "Choose a subject or tell me the topic first, then I can give focused IGCSE/GCSE help.";
+  }
+  return "";
+}
+
+function inferSubjectFromMessage(message: string) {
+  const text = message.toLowerCase();
+  if (/\b(electrolysis|chemistry|ionic|cathode|anode|moles?|alkane|acid|base|salt)\b/.test(text)) {
+    return "Chemistry";
+  }
+  if (/\b(ecology|biology|enzyme|cell|photosynthesis|respiration|osmosis|diffusion)\b/.test(text)) {
+    return "Biology";
+  }
+  if (/\b(physics|force|energy|voltage|current|waves?|momentum)\b/.test(text)) return "Physics";
+  if (/\b(maths|math|algebra|quadratic|trigonometry|histogram)\b/.test(text)) return "Maths";
+  if (/\b(computer science|algorithm|binary|python|network|programming)\b/.test(text)) {
+    return "Computer Science";
+  }
+  return null;
+}
+
+function inferTopicFromMessage(message: string) {
+  const text = message.toLowerCase();
+  if (text.includes("electrolysis")) return "Electrolysis";
+  if (text.includes("ecology")) return "Ecology";
+  if (text.includes("enzyme")) return "Enzymes";
+  if (text.includes("photosynthesis")) return "Photosynthesis";
+  if (text.includes("respiration")) return "Respiration";
+  return null;
+}
+
+function shouldUseWeakTopics(intent: TutorIntent, mode: string) {
+  return intent === "revision-coaching" || mode === "Weak Topic Coach";
+}
+
+function scrubBadTutorSeeds(chats: TutorChat[]) {
+  return chats
+    .map((chat) => ({
+      ...chat,
+      messages: chat.messages.filter((message) => !BAD_BIOLOGY_SEED_PATTERN.test(message.content)),
+    }))
+    .filter((chat) => chat.messages.length > 0 || !BAD_BIOLOGY_SEED_PATTERN.test(chat.title));
+}
+
+function clearLegacyTutorSeeds() {
+  if (typeof window === "undefined") return;
+  for (const key of LEGACY_CHAT_KEYS) {
+    window.localStorage.removeItem(key);
+  }
+  const raw = window.localStorage.getItem(CHAT_KEY);
+  if (!raw || !BAD_BIOLOGY_SEED_PATTERN.test(raw)) return;
+  try {
+    const chats = JSON.parse(raw) as TutorChat[];
+    window.localStorage.setItem(CHAT_KEY, JSON.stringify(scrubBadTutorSeeds(chats)));
+  } catch {
+    window.localStorage.removeItem(CHAT_KEY);
+  }
+}
+
+function readChats(): TutorChat[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(CHAT_KEY);
+    return raw ? scrubBadTutorSeeds(JSON.parse(raw) as TutorChat[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveChats(chats: TutorChat[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(CHAT_KEY, JSON.stringify(chats.slice(0, 20)));
+}

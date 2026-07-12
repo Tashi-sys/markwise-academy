@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useAttempts } from "../lib/storage";
-import { getQuestion, TOPICS } from "../lib/questions";
+import { getQuestion, getTopicMeta, getSubjectName } from "../lib/questions";
+import { useAuth } from "../lib/auth";
 import { Check, CircleAlert, RotateCcw } from "lucide-react";
 
 export const Route = createFileRoute("/app/review")({
@@ -8,20 +9,24 @@ export const Route = createFileRoute("/app/review")({
 });
 
 function ReviewPage() {
+  const { user } = useAuth();
   const { attempts } = useAttempts();
-  const ordered = [...attempts].reverse();
+
+  if (!user) return null;
+
+  const ordered = [...attempts].filter((a) => a.examBoard === user.examBoard).reverse();
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Review mistakes</h1>
-        <p className="mt-1 text-muted-foreground">Look back, rewrite, and compare improvement.</p>
+        <p className="mt-1 text-muted-foreground">Your attempt history for your syllabus.</p>
       </div>
 
       {ordered.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center">
           <p className="text-sm text-muted-foreground">
-            You haven't attempted any questions yet.{" "}
+            You haven&apos;t attempted any questions yet.{" "}
             <Link to="/app/subjects" className="font-medium text-primary hover:underline">
               Start with a topic
             </Link>
@@ -39,9 +44,11 @@ function ReviewPage() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="text-xs text-muted-foreground">
-                      {TOPICS[a.topic]?.name ?? a.topic} · {new Date(a.date).toLocaleDateString()}
+                      {getSubjectName(user.examBoard, a.subject)} ·{" "}
+                      {getTopicMeta(a.subject, a.topic).name} ·{" "}
+                      {new Date(a.date).toLocaleDateString()}
                     </div>
-                    <p className="mt-1 font-semibold">{q.prompt}</p>
+                    <p className="mt-1 font-semibold">{q.questionText}</p>
                   </div>
                   <span
                     className={`shrink-0 rounded-full px-3 py-1 text-sm font-semibold ${
@@ -79,7 +86,8 @@ function ReviewPage() {
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-warning">
-                        <CircleAlert className="h-3.5 w-3.5" /> {a.total - a.score} mark{a.total - a.score === 1 ? "" : "s"} away from full
+                        <CircleAlert className="h-3.5 w-3.5" /> {a.total - a.score} mark
+                        {a.total - a.score === 1 ? "" : "s"} away from full
                       </span>
                     )}
                   </div>

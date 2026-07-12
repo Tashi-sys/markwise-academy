@@ -1,9 +1,12 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
-import { getQuestionsByTopic, getTopicMeta } from "../lib/questions";
+import { filterQuestions } from "../data/questionBank";
+import { getTopicMeta, getSubjectName } from "../lib/questions";
+import { useAuth } from "../lib/auth";
+import { getSyllabusCode } from "../data/syllabusConfig";
 
-export const Route = createFileRoute("/app/practice/$topic")({
+export const Route = createFileRoute("/app/practice/$subject/$topic")({
   component: PracticeSetup,
 });
 
@@ -12,14 +15,46 @@ type Difficulty = "any" | "easy" | "medium" | "hard";
 type Mode = "practice" | "exam" | "hint";
 
 function PracticeSetup() {
-  const { topic } = Route.useParams();
-  const meta = getTopicMeta(topic);
-  const all = getQuestionsByTopic(topic);
+  const { subject, topic } = Route.useParams();
+  const { user } = useAuth();
   const navigate = useNavigate();
-
   const [length, setLength] = useState<Length>("any");
   const [difficulty, setDifficulty] = useState<Difficulty>("any");
   const [mode, setMode] = useState<Mode>("practice");
+
+  if (!user) return null;
+
+  if (!user.selectedSubjects.includes(subject)) {
+    throw notFound();
+  }
+
+  const meta = getTopicMeta(subject, topic);
+  const syllabusCode = getSyllabusCode(user.examBoard, subject);
+  const all = filterQuestions({
+    qualification: user.qualification,
+    examBoard: user.examBoard,
+    subject,
+    syllabusCode,
+    topic,
+  });
+
+  if (all.length === 0) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-6 text-center">
+        <h1 className="text-3xl font-bold tracking-tight">{meta.name}</h1>
+        <div className="rounded-2xl border border-border bg-card p-10 shadow-soft">
+          <p className="text-muted-foreground">This topic does not have matching questions yet.</p>
+          <Link
+            to="/app/topics/$subject"
+            params={{ subject }}
+            className="mt-4 inline-block text-sm font-medium text-primary hover:underline"
+          >
+            Back to topics
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const filtered = all.filter((q) => {
     if (difficulty !== "any" && q.difficulty !== difficulty) return false;
@@ -38,34 +73,59 @@ function PracticeSetup() {
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       <div>
-        <div className="text-sm text-muted-foreground">Biology</div>
+        <div className="text-sm text-muted-foreground">
+          {getSubjectName(user.examBoard, subject)}
+        </div>
         <h1 className="text-3xl font-bold tracking-tight">{meta.name}</h1>
         <p className="mt-1 text-muted-foreground">{meta.blurb}</p>
       </div>
 
       <Section title="Question length">
-        <ChoiceRow value={length} onChange={setLength} options={[
-          { v: "any", l: "Mixed" },
-          { v: "1-2", l: "1–2 marks" },
-          { v: "3-4", l: "3–4 marks" },
-          { v: "5-6", l: "5–6 marks" },
-        ]} />
+        <ChoiceRow
+          value={length}
+          onChange={setLength}
+          options={[
+            { v: "any", l: "Mixed" },
+            { v: "1-2", l: "1–2 marks" },
+            { v: "3-4", l: "3–4 marks" },
+            { v: "5-6", l: "5–6 marks" },
+          ]}
+        />
       </Section>
 
       <Section title="Difficulty">
-        <ChoiceRow value={difficulty} onChange={setDifficulty} options={[
-          { v: "any", l: "Any" },
-          { v: "easy", l: "Easy" },
-          { v: "medium", l: "Medium" },
-          { v: "hard", l: "Hard" },
-        ]} />
+        <ChoiceRow
+          value={difficulty}
+          onChange={setDifficulty}
+          options={[
+            { v: "any", l: "Any" },
+            { v: "easy", l: "Easy" },
+            { v: "medium", l: "Medium" },
+            { v: "hard", l: "Hard" },
+          ]}
+        />
       </Section>
 
       <Section title="Mode">
         <div className="grid gap-3 md:grid-cols-3">
-          <ModeCard active={mode === "practice"} onClick={() => setMode("practice")} title="Practice" body="Hints + feedback after every answer." />
-          <ModeCard active={mode === "exam"} onClick={() => setMode("exam")} title="Exam" body="Timed. Feedback only at the end." />
-          <ModeCard active={mode === "hint"} onClick={() => setMode("hint")} title="Hint" body="Reveal layered hints before submitting." />
+          <ModeCard
+            active={mode === "practice"}
+            onClick={() => setMode("practice")}
+            title="Practice"
+            body="Hints + feedback after every answer."
+          />
+          <ModeCard
+            active={mode === "exam"}
+            onClick={() => setMode("exam")}
+            title="Exam"
+            body="Timed. Feedback only at the end."
+          />
+          <ModeCard
+            active={mode === "hint"}
+            onClick={() => setMode("hint")}
+            title="Hint"
+            body="Reveal layered hints before submitting."
+          />
         </div>
       </Section>
 
@@ -109,6 +169,7 @@ function ChoiceRow<T extends string>({
         return (
           <button
             key={o.v}
+            type="button"
             onClick={() => onChange(o.v)}
             className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
               active
@@ -137,9 +198,12 @@ function ModeCard({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={`rounded-2xl border p-4 text-left shadow-soft transition ${
-        active ? "border-primary bg-primary/5 ring-2 ring-primary/30" : "border-border bg-card hover:bg-secondary"
+        active
+          ? "border-primary bg-primary/5 ring-2 ring-primary/30"
+          : "border-border bg-card hover:bg-secondary"
       }`}
     >
       <div className="font-semibold">{title}</div>

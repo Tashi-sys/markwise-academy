@@ -1,58 +1,85 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Lock, ArrowRight } from "lucide-react";
-import { SUBJECTS } from "../lib/questions";
+import { BookOpen } from "lucide-react";
+import { useAuth, updateUserProfile } from "../lib/auth";
+import { getSyllabusSubjects } from "../data/miniPaperConfig";
+import { subjectHasQuestions } from "../data/questionBank";
+import { getSyllabusCode } from "../data/syllabusConfig";
+import { SubjectCard } from "../components/subjects/SubjectCard";
+import { useState } from "react";
 
 export const Route = createFileRoute("/app/subjects")({
   component: SubjectsPage,
 });
 
 function SubjectsPage() {
+  const { user, refresh } = useAuth();
+  const [saving, setSaving] = useState<string | null>(null);
+
+  if (!user) return null;
+
+  const boardSubjects = getSyllabusSubjects(user.examBoard);
+  const studying = new Set(user.selectedSubjects);
+
+  const toggleStudying = (subjectId: string) => {
+    setSaving(subjectId);
+    const next = studying.has(subjectId)
+      ? user.selectedSubjects.filter((s) => s !== subjectId)
+      : [...user.selectedSubjects, subjectId];
+    updateUserProfile({ selectedSubjects: next });
+    refresh();
+    setSaving(null);
+  };
+
   return (
-    <div className="space-y-8">
+    <div className="animate-enter space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Choose a subject</h1>
-        <p className="mt-1 text-muted-foreground">More subjects unlocking soon.</p>
+        <h1 className="text-3xl font-bold tracking-tight">Your subjects</h1>
+        <p className="mt-1 text-muted-foreground">
+          Subjects for your exam board. Mark the ones you&apos;re studying — only your syllabus
+          questions will appear.
+        </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {SUBJECTS.map((s) => {
-          const available = s.status === "available";
-          const Card = (
-            <div
-              className={`group relative h-full overflow-hidden rounded-2xl border border-border bg-card p-6 shadow-soft transition ${
-                available ? "hover:-translate-y-0.5 hover:shadow-glow" : "opacity-70"
-              }`}
-            >
-              <div className={`absolute -right-6 -top-6 h-24 w-24 rounded-full bg-gradient-to-br ${s.accent} opacity-20 blur-2xl`} />
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold">{s.name}</h2>
-                {available ? (
-                  <span className="rounded-full bg-success/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-success">
-                    Available
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    <Lock className="h-3 w-3" /> Soon
-                  </span>
-                )}
-              </div>
-              <p className="mt-3 text-sm text-muted-foreground">{s.blurb}</p>
-              {available && (
-                <div className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-primary">
-                  Open topics <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-                </div>
-              )}
-            </div>
+      <div className="stagger-grid grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {boardSubjects.map((s) => {
+          const isStudying = studying.has(s.id);
+          const hasQuestions = subjectHasQuestions(
+            user.examBoard,
+            s.id,
+            user.qualification,
+            getSyllabusCode(user.examBoard, s.id),
           );
-          return available ? (
-            <Link key={s.id} to="/app/topics/$subject" params={{ subject: s.id }}>
-              {Card}
-            </Link>
-          ) : (
-            <div key={s.id}>{Card}</div>
+
+          return (
+            <SubjectCard
+              key={s.id}
+              id={s.id}
+              name={s.name}
+              blurb={s.blurb}
+              isStudying={isStudying}
+              hasQuestions={hasQuestions}
+              onToggleStudying={() => toggleStudying(s.id)}
+              toggleLabel={saving === s.id ? "Saving…" : undefined}
+              topicsHref={isStudying && hasQuestions ? `/app/topics/${s.id}` : undefined}
+            />
           );
         })}
       </div>
+
+      {user.selectedSubjects.length === 0 && (
+        <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
+          <BookOpen className="mx-auto h-8 w-8 text-muted-foreground" />
+          <p className="mt-3 text-sm text-muted-foreground">
+            Select at least one subject above to start practising.
+          </p>
+          <Link
+            to="/app/profile"
+            className="mt-2 inline-block text-sm font-medium text-primary hover:underline"
+          >
+            Or update subjects in your profile
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
