@@ -4,7 +4,7 @@ MarkWise is a GCSE and IGCSE revision web app for exam-style practice, markschem
 
 ## Purpose
 
-Over the past year, I noticed that many IGCSE students spend a lot of time revising but often do not know which topics they should focus on. MarkWise was designed to solve this by providing personalised revision, smart practice, and AI-powered learning support in one platform. I would love to pilot it with students at King’s College International School Bangkok and gather feedback to improve it further.
+Over the past year, I noticed that many IGCSE students spend a lot of time revising but often do not know which topics they should focus on. MarkWise was designed to solve this by providing personalised revision, smart practice, and AI-powered learning support in one platform. I would love to pilot it with students and gather feedback to improve it further.
 
 ## Features
 
