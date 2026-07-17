@@ -53,32 +53,6 @@ type RecentActivityItem = {
   accuracy?: number;
 };
 
-const MOCK_WEAK_TOPICS: WeakTopicRow[] = [
-  {
-    subject: "physics",
-    subjectName: "Physics",
-    topic: "forces",
-    topicName: "Forces and Motion",
-    accuracy: 42,
-    attempted: 18,
-  },
-  {
-    subject: "chemistry",
-    subjectName: "Chemistry",
-    topic: "chemical-changes",
-    topicName: "Chemical Changes",
-    accuracy: 55,
-    attempted: 24,
-  },
-  {
-    subject: "biology",
-    subjectName: "Biology",
-    topic: "plant-transport",
-    topicName: "Plant Transport",
-    accuracy: 61,
-    attempted: 15,
-  },
-];
 
 const MOCK_DAILY_STREAK = {
   currentStreak: 5,
@@ -173,7 +147,7 @@ function Dashboard() {
           accuracy: item.acc,
           attempted: item.count,
         }))
-    : MOCK_WEAK_TOPICS;
+    : [];
 
   const recent = [...userAttempts].slice(-5).reverse();
   const quickSubjects: QuickSubject[] = (
@@ -867,7 +841,7 @@ function WeakTopicsPanel({ topics }: { topics: WeakTopicRow[] }) {
           </p>
         </div>
         <span className="rounded-full bg-warning/15 px-2.5 py-1 text-xs font-semibold text-warning">
-          Priority
+          {topics.length ? "Priority" : "Personal"}
         </span>
       </div>
 
