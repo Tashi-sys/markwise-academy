@@ -24,6 +24,7 @@ import {
   Sparkles,
   Bot,
   NotebookTabs,
+  GraduationCap,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getCurrentUser, logout, useAuth } from "../lib/auth";
@@ -53,6 +54,7 @@ const NAV = [
   { to: "/app/review", label: "Review", icon: History, exact: false },
   { to: "/app/ai-tutor", label: "AI Tutor", icon: Bot, exact: true },
   { to: "/app/study-notebook", label: "Study Notebook", icon: NotebookTabs, exact: true },
+  { to: "/app/classroom", label: "Classroom", icon: GraduationCap, exact: false },
   { to: "/app/keywords", label: "Keywords", icon: KeyRound, exact: true },
   { to: "/app/flashcards", label: "Flashcards", icon: Layers, exact: true },
   { to: "/app/model-answers", label: "Models", icon: BookOpenCheck, exact: true },
@@ -66,7 +68,7 @@ const MOBILE_NAV = [
   { to: "/app/dashboard", label: "Home", icon: LayoutDashboard, exact: true },
   { to: "/app/practice", label: "Practise", icon: ListChecks, exact: false },
   { to: "/app/ai-tutor", label: "AI Tutor", icon: Bot, exact: true },
-  { to: "/app/study-notebook", label: "Notebook", icon: NotebookTabs, exact: true },
+  { to: "/app/classroom", label: "Classroom", icon: GraduationCap, exact: false },
   { to: "/app/progress", label: "Progress", icon: LineChart, exact: false },
 ];
 
@@ -74,6 +76,7 @@ function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [themeId] = useState<MarkwiseThemeId>(() => readStoredTheme());
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isNavigating = useRouterState({ select: (s) => s.status === "pending" });
   const { user, ready } = useAuth();
   const navigate = useNavigate();
 
@@ -101,6 +104,11 @@ function AppLayout() {
 
   return (
     <div className="premium-shell min-h-screen bg-background text-foreground">
+      {isNavigating && (
+        <div className="route-progress fixed inset-x-0 top-0 z-50 h-1 bg-primary/15">
+          <div className="route-progress-fill h-full bg-gradient-to-r from-primary via-accent to-primary" />
+        </div>
+      )}
       <div className="mx-auto flex w-full max-w-7xl">
         <aside className="glass-card sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-border/60 bg-sidebar px-4 py-6 md:flex">
           <Link to="/" className="flex items-center gap-2 px-2">

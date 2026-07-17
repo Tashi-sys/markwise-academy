@@ -12,6 +12,7 @@ import {
   Clock3,
   Activity,
   Zap,
+  GraduationCap,
 } from "lucide-react";
 import { useAttempts, topicStats, computeStreak, useFlashcards } from "../lib/storage";
 import { getQuestion, getTopicMeta } from "../lib/questions";
@@ -19,6 +20,7 @@ import { useAuth } from "../lib/auth";
 import { getExamBoard, getSubjectName } from "../data/syllabusConfig";
 import { filterQuestions, getTopicsWithQuestions } from "../data/questionBank";
 import { buildStudyPlan, missedKeywords } from "../lib/examTraining";
+import { formatClassroomDate, getUpcomingAssignment, useClassroomHub } from "../lib/classroomHub";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
 
@@ -120,6 +122,7 @@ function Dashboard() {
   const { user } = useAuth();
   const { attempts } = useAttempts();
   const { flashcards } = useFlashcards();
+  const { classrooms, assignments } = useClassroomHub();
 
   if (!user) return null;
 
@@ -258,6 +261,11 @@ function Dashboard() {
         };
       })
     : MOCK_RECENT_ACTIVITY;
+  const classroomUpcoming = getUpcomingAssignment(classrooms, assignments);
+  const classroomUpcomingRoom = classroomUpcoming
+    ? classrooms.find((room) => room.id === classroomUpcoming.classId)
+    : null;
+
   const badges = [
     { label: "Full Marks", earned: userAttempts.some((a) => a.score === a.total) },
     { label: "Keyword King", earned: userAttempts.filter((a) => a.score === a.total).length >= 5 },
@@ -285,6 +293,13 @@ function Dashboard() {
         <ContinueStudyingCard data={continueStudy} />
         <WeakTopicsPanel topics={weakTopics} />
       </div>
+
+      <ClassroomHubCard
+        classCount={classrooms.length}
+        upcomingTitle={classroomUpcoming?.title}
+        upcomingDueDate={classroomUpcoming?.dueDate}
+        upcomingClassName={classroomUpcomingRoom?.name}
+      />
 
       <div className="stagger-grid grid grid-cols-2 gap-3 md:grid-cols-5">
         <StatCard icon={<Target className="h-4 w-4" />} label="Attempted" value={totalQ} />
@@ -904,6 +919,63 @@ function WeakTopicsPanel({ topics }: { topics: WeakTopicRow[] }) {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function ClassroomHubCard({
+  classCount,
+  upcomingTitle,
+  upcomingDueDate,
+  upcomingClassName,
+}: {
+  classCount: number;
+  upcomingTitle?: string;
+  upcomingDueDate?: string;
+  upcomingClassName?: string;
+}) {
+  return (
+    <div className="interactive-card glass-card rounded-2xl border border-border bg-card p-5 shadow-soft md:p-6">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-start gap-4">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary">
+            <GraduationCap className="h-6 w-6" />
+          </span>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-semibold">Classroom Hub</h2>
+              <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                {classCount} class{classCount === 1 ? "" : "es"}
+              </span>
+            </div>
+            {upcomingTitle ? (
+              <p className="mt-1 text-sm text-muted-foreground">
+                Next: <strong className="text-foreground">{upcomingTitle}</strong>
+                {upcomingClassName ? ` in ${upcomingClassName}` : ""} · due{" "}
+                {formatClassroomDate(upcomingDueDate)}
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-muted-foreground">
+                Create or join a class to start using classroom assignments.
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            to="/app/classroom"
+            className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-glow hover:bg-primary/90"
+          >
+            Open Classroom <ArrowRight className="h-4 w-4" />
+          </Link>
+          <Link
+            to="/app/classroom"
+            className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-secondary"
+          >
+            Create / Join
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

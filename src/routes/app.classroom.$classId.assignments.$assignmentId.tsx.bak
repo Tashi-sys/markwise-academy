@@ -1,0 +1,598 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  ClipboardCheck,
+  Eye,
+  FileText,
+  MessageSquare,
+  Save,
+  Send,
+  Users,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { getQuestion } from "../lib/questions";
+import { AssignmentExportButtons } from "./app.classroom.$classId";
+import {
+  MOCK_CLASS_STUDENTS,
+  createOrUpdateSubmission,
+  formatClassroomDate,
+  getAssignmentById,
+  getClassById,
+  getSubmissionsForAssignment,
+  type Submission,
+  type SubmissionAnswer,
+  useClassroomHub,
+} from "../lib/classroomHub";
+import { useAuth } from "../lib/auth";
+
+export const Route = createFileRoute("/app/classroom/$classId/assignments/$assignmentId")({
+  loader: ({ params }) => ({ classId: params.classId, assignmentId: params.assignmentId }),
+  component: AssignmentDetailPage,
+  notFoundComponent: () => (
+    <div className="rounded-2xl border border-border bg-card p-10 text-center shadow-soft">
+      <h1 className="text-2xl font-bold">Assignment not found</h1>
+      <p className="mt-2 text-muted-foreground">This assignment may have been deleted locally.</p>
+      <Link
+        to="/app/classroom"
+        className="mt-5 inline-flex rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+      >
+        Back to Classroom Hub
+      </Link>
+    </div>
+  ),
+});
+
+function AssignmentDetailPage() {
+  const { classId, assignmentId } = Route.useParams();
+  const { user } = useAuth();
+  const { refresh } = useClassroomHub();
+  const classroom = getClassById(classId);
+  const assignment = getAssignmentById(assignmentId);
+  const questions =
+    assignment?.linkedQuestionIds.map((id) => getQuestion(id)).filter(Boolean) ?? [];
+  const submissions = getSubmissionsForAssignment(assignmentId);
+  const studentName = user?.name ?? "You";
+  const ownSubmission = submissions.find((submission) => submission.studentName === studentName);
+  const [index, setIndex] = useState(0);
+  const [answers, setAnswers] = useState<SubmissionAnswer[]>(
+    ownSubmission?.answers ??
+      questions.map((question) => ({
+        questionId: question!.id,
+        answer: "",
+      })),
+  );
+  const [selfMarks, setSelfMarks] = useState<Record<string, "correct" | "partial" | "incorrect">>(
+    Object.fromEntries(
+      ownSubmission?.answers
+        ?.filter((answer) => answer.selfMark)
+        .map((answer) => [answer.questionId, answer.selfMark]) ?? [],
+    ) as Record<string, "correct" | "partial" | "incorrect">,
+  );
+  const [writtenResponse, setWrittenResponse] = useState(
+    ownSubmission?.answers?.find((answer) => answer.questionId === "written-task")?.answer ?? "",
+  );
+
+  if (!classroom || !assignment || !user) return null;
+
+  const isTeacher = classroom.role === "teacher";
+  const currentQuestion = questions[index];
+  const totalMarks = questions.reduce((sum, question) => sum + (question?.marks ?? 0), 0);
+  const score = useMemo(() => {
+    return questions.reduce((sum, question) => {
+      if (!question) return sum;
+      const mark = selfMarks[question.id];
+      if (mark === "correct") return sum + question.marks;
+      if (mark === "partial") return sum + Math.max(1, Math.floor(question.marks / 2));
+      return sum;
+    }, 0);
+  }, [questions, selfMarks]);
+
+  function updateAnswer(questionId: string, value: string) {
+    setAnswers((current) => {
+      const exists = current.some((answer) => answer.questionId === questionId);
+      if (!exists) return [...current, { questionId, answer: value }];
+      return current.map((answer) =>
+        answer.questionId === questionId ? { ...answer, answer: value } : answer,
+      );
+    });
+  }
+
+  function saveProgress(status: "in-progress" | "submitted") {
+    const finalAnswers = questions.length
+      ? answers.map((answer) => ({
+          ...answer,
+          selfMark: selfMarks[answer.questionId],
+        }))
+      : [{ questionId: "written-task", answer: writtenResponse }];
+    createOrUpdateSubmission({
+      assignmentId: assignment.id,
+      studentName,
+      status,
+      submittedAt: status === "submitted" ? Date.now() : ownSubmission?.submittedAt,
+      score: status === "submitted" ? score : ownSubmission?.score,
+      totalMarks: status === "submitted" ? totalMarks : ownSubmission?.totalMarks,
+      feedback: ownSubmission?.feedback,
+      answers: finalAnswers,
+    });
+    refresh();
+    toast.success(status === "submitted" ? "Assignment submitted" : "Progress saved");
+  }
+
+  return (
+    <div className="animate-enter space-y-7">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <Link
+            to="/app/classroom/$classId"
+            params={{ classId }}
+            className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to class
+          </Link>
+          <h1 className="mt-3 text-3xl font-bold tracking-tight">{assignment.title}</h1>
+          <p className="mt-1 max-w-2xl text-muted-foreground">
+            {assignment.description || "No instructions added."}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
+          <div className="text-sm font-semibold">Due {formatClassroomDate(assignment.dueDate)}</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            {assignment.points} points · {assignment.assignmentType} · {assignment.status}
+          </div>
+        </div>
+      </div>
+
+      {isTeacher ? (
+        <TeacherAssignmentView
+          classroom={classroom}
+          assignment={assignment}
+          submissions={submissions}
+        />
+      ) : (
+        <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
+          <div className="glass-card rounded-2xl border border-border bg-card p-5 shadow-soft">
+            {currentQuestion ? (
+              <>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Question {index + 1} of {questions.length}
+                    </div>
+                    <h2 className="mt-2 text-lg font-semibold">{currentQuestion.questionText}</h2>
+                  </div>
+                  <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
+                    {currentQuestion.marks} marks
+                  </span>
+                </div>
+                <textarea
+                  value={
+                    answers.find((answer) => answer.questionId === currentQuestion.id)?.answer ?? ""
+                  }
+                  onChange={(event) => updateAnswer(currentQuestion.id, event.target.value)}
+                  className="mt-5 min-h-56 w-full rounded-2xl border border-border bg-background p-4 text-sm leading-relaxed"
+                  placeholder="Write your answer here..."
+                  disabled={
+                    ownSubmission?.status === "submitted" || ownSubmission?.status === "marked"
+                  }
+                />
+                <div className="mt-4 rounded-2xl border border-border bg-background/70 p-4">
+                  <div className="text-sm font-semibold">Self-mark before submitting</div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {["correct", "partial", "incorrect"].map((mark) => (
+                      <button
+                        key={mark}
+                        onClick={() =>
+                          setSelfMarks((current) => ({
+                            ...current,
+                            [currentQuestion.id]: mark as "correct" | "partial" | "incorrect",
+                          }))
+                        }
+                        className={`rounded-full px-3 py-1.5 text-xs font-semibold capitalize ${
+                          selfMarks[currentQuestion.id] === mark
+                            ? "bg-primary text-primary-foreground"
+                            : "border border-border hover:bg-secondary"
+                        }`}
+                      >
+                        {mark}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+                  <button
+                    onClick={() => setIndex((value) => Math.max(0, value - 1))}
+                    disabled={index === 0}
+                    className="rounded-full border border-border px-4 py-2 text-sm font-semibold disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => saveProgress("in-progress")}
+                      className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-secondary"
+                    >
+                      <Save className="h-4 w-4" />
+                      Save progress
+                    </button>
+                    {index < questions.length - 1 ? (
+                      <button
+                        onClick={() =>
+                          setIndex((value) => Math.min(questions.length - 1, value + 1))
+                        }
+                        className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+                      >
+                        Next <ArrowRight className="h-4 w-4" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => saveProgress("submitted")}
+                        className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+                      >
+                        Submit <Send className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-dashed border-border bg-background/60 p-6">
+                  <ClipboardCheck className="h-9 w-9 text-muted-foreground" />
+                  <h2 className="mt-4 text-xl font-semibold">Written task submission</h2>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Follow the teacher instructions above, then submit your response here.
+                  </p>
+                </div>
+                <textarea
+                  value={writtenResponse}
+                  onChange={(event) => setWrittenResponse(event.target.value)}
+                  className="min-h-72 w-full rounded-2xl border border-border bg-background p-4 text-sm leading-relaxed"
+                  placeholder="Write or paste your work here..."
+                  disabled={
+                    ownSubmission?.status === "submitted" || ownSubmission?.status === "marked"
+                  }
+                />
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button
+                    onClick={() => saveProgress("in-progress")}
+                    className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-secondary"
+                  >
+                    <Save className="h-4 w-4" />
+                    Save draft
+                  </button>
+                  <button
+                    onClick={() => saveProgress("submitted")}
+                    className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+                  >
+                    Submit task <Send className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="glass-card rounded-2xl border border-border bg-card p-5 shadow-soft">
+            <h2 className="text-lg font-semibold">Submission status</h2>
+            <div className="mt-4 space-y-2 text-sm">
+              <StatusLine label="Status" value={ownSubmission?.status ?? "not-started"} />
+              <StatusLine label="Questions" value={`${questions.length}`} />
+              <StatusLine label="Self score" value={`${score}/${totalMarks}`} />
+              <StatusLine
+                label="Submitted"
+                value={formatClassroomDate(ownSubmission?.submittedAt)}
+              />
+            </div>
+            {ownSubmission?.status === "submitted" && (
+              <div className="mt-4 rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success">
+                <CheckCircle2 className="mr-1 inline h-4 w-4" />
+                Submitted. Your teacher can review this locally.
+              </div>
+            )}
+            {ownSubmission?.feedback && (
+              <div className="mt-4 rounded-xl border border-primary/20 bg-primary/10 p-3 text-sm">
+                <div className="font-semibold text-primary">Teacher feedback</div>
+                <p className="mt-1 text-muted-foreground">{ownSubmission.feedback}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TeacherAssignmentView({
+  classroom,
+  assignment,
+  submissions,
+}: {
+  classroom: NonNullable<ReturnType<typeof getClassById>>;
+  assignment: NonNullable<ReturnType<typeof getAssignmentById>>;
+  submissions: ReturnType<typeof getSubmissionsForAssignment>;
+}) {
+  const { refresh } = useClassroomHub();
+  const questions = assignment.linkedQuestionIds.map((id) => getQuestion(id)).filter(Boolean);
+  const submissionByName = new Map(
+    submissions.map((submission) => [submission.studentName, submission]),
+  );
+  const [selectedStudent, setSelectedStudent] = useState(
+    submissions[0]?.studentName ?? MOCK_CLASS_STUDENTS[0],
+  );
+  const selectedSubmission = submissionByName.get(selectedStudent);
+  const totalMarks = questions.reduce((sum, q) => sum + (q?.marks ?? 0), 0);
+  const submittedCount = submissions.filter((submission) =>
+    ["submitted", "marked", "late"].includes(submission.status),
+  ).length;
+  const averageScore = submissions.length
+    ? Math.round(
+        submissions.reduce((sum, submission) => {
+          const submissionTotal = submission.totalMarks ?? (totalMarks || assignment.points || 1);
+          return sum + ((submission.score ?? 0) / Math.max(1, submissionTotal)) * 100;
+        }, 0) / submissions.length,
+      )
+    : 0;
+
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <TeacherMetric label="Submitted" value={String(submittedCount) + "/" + MOCK_CLASS_STUDENTS.length} />
+        <TeacherMetric label="Average score" value={submissions.length ? String(averageScore) + "%" : "No scores"} />
+        <TeacherMetric label="Questions" value={String(questions.length || 1)} />
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[1fr_0.85fr]">
+        <div className="glass-card rounded-2xl border border-border bg-card p-5 shadow-soft">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">Submissions</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Open a student to view answers, score and teacher feedback.
+              </p>
+            </div>
+            <AssignmentExportButtons classroom={classroom} assignment={assignment} />
+          </div>
+          <div className="mt-5 space-y-2">
+            {MOCK_CLASS_STUDENTS.map((student) => {
+              const submission = submissionByName.get(student);
+              return (
+                <button
+                  key={student}
+                  onClick={() => setSelectedStudent(student)}
+                  className={
+                    "flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-soft " +
+                    (selectedStudent === student
+                      ? "border-primary/50 bg-primary/10"
+                      : "border-border bg-background/70")
+                  }
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-9 w-9 place-items-center rounded-full bg-primary/10 font-bold text-primary">
+                      {student.slice(0, 1)}
+                    </div>
+                    <div>
+                      <div className="font-semibold">{student}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {submission?.submittedAt
+                          ? "Submitted " + formatClassroomDate(submission.submittedAt)
+                          : "No submission yet"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 text-right text-sm">
+                    <div>
+                      <div className="font-semibold capitalize">
+                        {submission?.status ?? "not-started"}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {submission?.score ?? 0}/{submission?.totalMarks ?? totalMarks}
+                      </div>
+                    </div>
+                    <Eye className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <TeacherSubmissionInspector
+          assignment={assignment}
+          questions={questions}
+          studentName={selectedStudent}
+          submission={selectedSubmission}
+          fallbackTotalMarks={totalMarks}
+          onSaved={refresh}
+        />
+      </div>
+
+      <div className="glass-card rounded-2xl border border-border bg-card p-5 shadow-soft">
+        <h2 className="text-lg font-semibold">Linked questions</h2>
+        {questions.length ? (
+          <div className="mt-4 max-h-[520px] space-y-2 overflow-y-auto pr-1">
+            {questions.map((question, index) => (
+              <div
+                key={question!.id}
+                className="rounded-xl border border-border bg-background/70 p-3 text-sm"
+              >
+                <div className="font-semibold">
+                  {index + 1}. {question!.marks} marks
+                </div>
+                <p className="mt-1 line-clamp-3 text-muted-foreground">{question!.questionText}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-4 rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+            No questions linked to this assignment.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TeacherMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
+      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div className="mt-1 text-2xl font-black">{value}</div>
+    </div>
+  );
+}
+
+function TeacherSubmissionInspector({
+  assignment,
+  questions,
+  studentName,
+  submission,
+  fallbackTotalMarks,
+  onSaved,
+}: {
+  assignment: NonNullable<ReturnType<typeof getAssignmentById>>;
+  questions: NonNullable<ReturnType<typeof getQuestion>>[];
+  studentName: string;
+  submission?: Submission;
+  fallbackTotalMarks: number;
+  onSaved: () => void;
+}) {
+  const [score, setScore] = useState(String(submission?.score ?? ""));
+  const [feedback, setFeedback] = useState(submission?.feedback ?? "");
+
+  useEffect(() => {
+    setScore(String(submission?.score ?? ""));
+    setFeedback(submission?.feedback ?? "");
+  }, [submission?.id, submission?.score, submission?.feedback]);
+
+  const answersByQuestion = new Map(
+    submission?.answers?.map((answer) => [answer.questionId, answer]) ?? [],
+  );
+  const totalMarks = submission?.totalMarks ?? fallbackTotalMarks;
+
+  function saveTeacherMark() {
+    const numericScore = Math.max(0, Math.min(totalMarks || assignment.points, Number(score) || 0));
+    createOrUpdateSubmission({
+      id: submission?.id,
+      assignmentId: assignment.id,
+      studentName,
+      status: "marked",
+      submittedAt: submission?.submittedAt,
+      score: numericScore,
+      totalMarks: totalMarks || assignment.points,
+      feedback,
+      answers: submission?.answers ?? [],
+    });
+    onSaved();
+    toast.success("Teacher feedback saved");
+  }
+
+  return (
+    <div className="glass-card rounded-2xl border border-border bg-card p-5 shadow-soft">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">{studentName}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {submission
+              ? submission.status + " · " + formatClassroomDate(submission.submittedAt)
+              : "No submission yet"}
+          </p>
+        </div>
+        <span className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold capitalize">
+          {submission?.status ?? "not-started"}
+        </span>
+      </div>
+
+      {submission ? (
+        <>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <label className="text-sm font-semibold">
+              Score
+              <input
+                value={score}
+                onChange={(event) => setScore(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2"
+                inputMode="numeric"
+                placeholder="0"
+              />
+            </label>
+            <div className="rounded-xl border border-border bg-background/70 p-3 text-sm">
+              <div className="text-muted-foreground">Total marks</div>
+              <div className="mt-1 text-xl font-black">{totalMarks || assignment.points}</div>
+            </div>
+          </div>
+
+          <label className="mt-4 block text-sm font-semibold">
+            Feedback
+            <textarea
+              value={feedback}
+              onChange={(event) => setFeedback(event.target.value)}
+              className="mt-2 min-h-28 w-full rounded-xl border border-border bg-background p-3 text-sm leading-relaxed"
+              placeholder="Add feedback for this student..."
+            />
+          </label>
+
+          <div className="mt-5 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <FileText className="h-4 w-4 text-primary" />
+              Student work
+            </div>
+            {questions.length ? (
+              questions.map((question, index) => {
+                const answer = answersByQuestion.get(question.id);
+                return (
+                  <div key={question.id} className="rounded-xl border border-border bg-background/70 p-3">
+                    <div className="flex items-start justify-between gap-3 text-sm">
+                      <div className="font-semibold">Q{index + 1}. {question.questionText}</div>
+                      <span className="shrink-0 rounded-full bg-secondary px-2 py-1 text-xs font-semibold">
+                        {answer?.selfMark ?? "unmarked"}
+                      </span>
+                    </div>
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
+                      {answer?.answer || "No answer written."}
+                    </p>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="rounded-xl border border-border bg-background/70 p-3">
+                <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                  {answersByQuestion.get("written-task")?.answer || "No written response submitted."}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={saveTeacherMark}
+            className="mt-5 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+          >
+            <MessageSquare className="h-4 w-4" />
+            Save score and feedback
+          </button>
+        </>
+      ) : (
+        <div className="mt-5 rounded-2xl border border-dashed border-border bg-background/60 p-8 text-center">
+          <Users className="mx-auto h-8 w-8 text-muted-foreground" />
+          <h3 className="mt-3 font-semibold">No work submitted yet</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Once this student submits, their answers and score will appear here.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatusLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between rounded-xl border border-border bg-background/70 p-3">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-semibold capitalize">{value}</span>
+    </div>
+  );
+}

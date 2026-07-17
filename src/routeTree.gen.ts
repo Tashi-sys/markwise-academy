@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ClassroomRouteImport } from './routes/classroom'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
@@ -26,11 +27,17 @@ import { Route as AppGenerateRouteImport } from './routes/app.generate'
 import { Route as AppFlashcardsRouteImport } from './routes/app.flashcards'
 import { Route as AppDashboardRouteImport } from './routes/app.dashboard'
 import { Route as AppCommonMistakesRouteImport } from './routes/app.common-mistakes'
+import { Route as AppClassroomRouteImport } from './routes/app.classroom'
 import { Route as AppAiTutorRouteImport } from './routes/app.ai-tutor'
 import { Route as AppPracticeIndexRouteImport } from './routes/app.practice.index'
 import { Route as AppTopicsSubjectRouteImport } from './routes/app.topics.$subject'
 import { Route as AppQuestionIdRouteImport } from './routes/app.question.$id'
+import { Route as AppClassroomClassIdRouteImport } from './routes/app.classroom.$classId'
+import { Route as AppClassroomTaskClassIdRouteImport } from './routes/app.classroom-task.$classId'
+import { Route as AppClassroomStreamClassIdRouteImport } from './routes/app.classroom-stream.$classId'
 import { Route as AppPracticeSubjectTopicRouteImport } from './routes/app.practice.$subject.$topic'
+import { Route as AppClassroomClassIdStreamRouteImport } from './routes/app.classroom.$classId.stream'
+import { Route as AppClassroomAssignmentClassIdAssignmentIdRouteImport } from './routes/app.classroom-assignment.$classId.$assignmentId'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -40,6 +47,11 @@ const SignupRoute = SignupRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClassroomRoute = ClassroomRouteImport.update({
+  id: '/classroom',
+  path: '/classroom',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRoute = AppRouteImport.update({
@@ -117,6 +129,11 @@ const AppCommonMistakesRoute = AppCommonMistakesRouteImport.update({
   path: '/common-mistakes',
   getParentRoute: () => AppRoute,
 } as any)
+const AppClassroomRoute = AppClassroomRouteImport.update({
+  id: '/classroom',
+  path: '/classroom',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAiTutorRoute = AppAiTutorRouteImport.update({
   id: '/ai-tutor',
   path: '/ai-tutor',
@@ -137,18 +154,48 @@ const AppQuestionIdRoute = AppQuestionIdRouteImport.update({
   path: '/question/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const AppClassroomClassIdRoute = AppClassroomClassIdRouteImport.update({
+  id: '/$classId',
+  path: '/$classId',
+  getParentRoute: () => AppClassroomRoute,
+} as any)
+const AppClassroomTaskClassIdRoute = AppClassroomTaskClassIdRouteImport.update({
+  id: '/classroom-task/$classId',
+  path: '/classroom-task/$classId',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppClassroomStreamClassIdRoute =
+  AppClassroomStreamClassIdRouteImport.update({
+    id: '/classroom-stream/$classId',
+    path: '/classroom-stream/$classId',
+    getParentRoute: () => AppRoute,
+  } as any)
 const AppPracticeSubjectTopicRoute = AppPracticeSubjectTopicRouteImport.update({
   id: '/practice/$subject/$topic',
   path: '/practice/$subject/$topic',
   getParentRoute: () => AppRoute,
 } as any)
+const AppClassroomClassIdStreamRoute =
+  AppClassroomClassIdStreamRouteImport.update({
+    id: '/stream',
+    path: '/stream',
+    getParentRoute: () => AppClassroomClassIdRoute,
+  } as any)
+const AppClassroomAssignmentClassIdAssignmentIdRoute =
+  AppClassroomAssignmentClassIdAssignmentIdRouteImport.update({
+    id: '/classroom-assignment/$classId/$assignmentId',
+    path: '/classroom-assignment/$classId/$assignmentId',
+    getParentRoute: () => AppRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/classroom': typeof ClassroomRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/app/ai-tutor': typeof AppAiTutorRoute
+  '/app/classroom': typeof AppClassroomRouteWithChildren
   '/app/common-mistakes': typeof AppCommonMistakesRoute
   '/app/dashboard': typeof AppDashboardRoute
   '/app/flashcards': typeof AppFlashcardsRoute
@@ -162,16 +209,23 @@ export interface FileRoutesByFullPath {
   '/app/study-notebook': typeof AppStudyNotebookRoute
   '/app/subjects': typeof AppSubjectsRoute
   '/app/': typeof AppIndexRoute
+  '/app/classroom-stream/$classId': typeof AppClassroomStreamClassIdRoute
+  '/app/classroom-task/$classId': typeof AppClassroomTaskClassIdRoute
+  '/app/classroom/$classId': typeof AppClassroomClassIdRouteWithChildren
   '/app/question/$id': typeof AppQuestionIdRoute
   '/app/topics/$subject': typeof AppTopicsSubjectRoute
   '/app/practice/': typeof AppPracticeIndexRoute
+  '/app/classroom-assignment/$classId/$assignmentId': typeof AppClassroomAssignmentClassIdAssignmentIdRoute
+  '/app/classroom/$classId/stream': typeof AppClassroomClassIdStreamRoute
   '/app/practice/$subject/$topic': typeof AppPracticeSubjectTopicRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/classroom': typeof ClassroomRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/app/ai-tutor': typeof AppAiTutorRoute
+  '/app/classroom': typeof AppClassroomRouteWithChildren
   '/app/common-mistakes': typeof AppCommonMistakesRoute
   '/app/dashboard': typeof AppDashboardRoute
   '/app/flashcards': typeof AppFlashcardsRoute
@@ -185,18 +239,25 @@ export interface FileRoutesByTo {
   '/app/study-notebook': typeof AppStudyNotebookRoute
   '/app/subjects': typeof AppSubjectsRoute
   '/app': typeof AppIndexRoute
+  '/app/classroom-stream/$classId': typeof AppClassroomStreamClassIdRoute
+  '/app/classroom-task/$classId': typeof AppClassroomTaskClassIdRoute
+  '/app/classroom/$classId': typeof AppClassroomClassIdRouteWithChildren
   '/app/question/$id': typeof AppQuestionIdRoute
   '/app/topics/$subject': typeof AppTopicsSubjectRoute
   '/app/practice': typeof AppPracticeIndexRoute
+  '/app/classroom-assignment/$classId/$assignmentId': typeof AppClassroomAssignmentClassIdAssignmentIdRoute
+  '/app/classroom/$classId/stream': typeof AppClassroomClassIdStreamRoute
   '/app/practice/$subject/$topic': typeof AppPracticeSubjectTopicRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/classroom': typeof ClassroomRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/app/ai-tutor': typeof AppAiTutorRoute
+  '/app/classroom': typeof AppClassroomRouteWithChildren
   '/app/common-mistakes': typeof AppCommonMistakesRoute
   '/app/dashboard': typeof AppDashboardRoute
   '/app/flashcards': typeof AppFlashcardsRoute
@@ -210,9 +271,14 @@ export interface FileRoutesById {
   '/app/study-notebook': typeof AppStudyNotebookRoute
   '/app/subjects': typeof AppSubjectsRoute
   '/app/': typeof AppIndexRoute
+  '/app/classroom-stream/$classId': typeof AppClassroomStreamClassIdRoute
+  '/app/classroom-task/$classId': typeof AppClassroomTaskClassIdRoute
+  '/app/classroom/$classId': typeof AppClassroomClassIdRouteWithChildren
   '/app/question/$id': typeof AppQuestionIdRoute
   '/app/topics/$subject': typeof AppTopicsSubjectRoute
   '/app/practice/': typeof AppPracticeIndexRoute
+  '/app/classroom-assignment/$classId/$assignmentId': typeof AppClassroomAssignmentClassIdAssignmentIdRoute
+  '/app/classroom/$classId/stream': typeof AppClassroomClassIdStreamRoute
   '/app/practice/$subject/$topic': typeof AppPracticeSubjectTopicRoute
 }
 export interface FileRouteTypes {
@@ -220,9 +286,11 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/app'
+    | '/classroom'
     | '/login'
     | '/signup'
     | '/app/ai-tutor'
+    | '/app/classroom'
     | '/app/common-mistakes'
     | '/app/dashboard'
     | '/app/flashcards'
@@ -236,16 +304,23 @@ export interface FileRouteTypes {
     | '/app/study-notebook'
     | '/app/subjects'
     | '/app/'
+    | '/app/classroom-stream/$classId'
+    | '/app/classroom-task/$classId'
+    | '/app/classroom/$classId'
     | '/app/question/$id'
     | '/app/topics/$subject'
     | '/app/practice/'
+    | '/app/classroom-assignment/$classId/$assignmentId'
+    | '/app/classroom/$classId/stream'
     | '/app/practice/$subject/$topic'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/classroom'
     | '/login'
     | '/signup'
     | '/app/ai-tutor'
+    | '/app/classroom'
     | '/app/common-mistakes'
     | '/app/dashboard'
     | '/app/flashcards'
@@ -259,17 +334,24 @@ export interface FileRouteTypes {
     | '/app/study-notebook'
     | '/app/subjects'
     | '/app'
+    | '/app/classroom-stream/$classId'
+    | '/app/classroom-task/$classId'
+    | '/app/classroom/$classId'
     | '/app/question/$id'
     | '/app/topics/$subject'
     | '/app/practice'
+    | '/app/classroom-assignment/$classId/$assignmentId'
+    | '/app/classroom/$classId/stream'
     | '/app/practice/$subject/$topic'
   id:
     | '__root__'
     | '/'
     | '/app'
+    | '/classroom'
     | '/login'
     | '/signup'
     | '/app/ai-tutor'
+    | '/app/classroom'
     | '/app/common-mistakes'
     | '/app/dashboard'
     | '/app/flashcards'
@@ -283,15 +365,21 @@ export interface FileRouteTypes {
     | '/app/study-notebook'
     | '/app/subjects'
     | '/app/'
+    | '/app/classroom-stream/$classId'
+    | '/app/classroom-task/$classId'
+    | '/app/classroom/$classId'
     | '/app/question/$id'
     | '/app/topics/$subject'
     | '/app/practice/'
+    | '/app/classroom-assignment/$classId/$assignmentId'
+    | '/app/classroom/$classId/stream'
     | '/app/practice/$subject/$topic'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
+  ClassroomRoute: typeof ClassroomRoute
   LoginRoute: typeof LoginRoute
   SignupRoute: typeof SignupRoute
 }
@@ -310,6 +398,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/classroom': {
+      id: '/classroom'
+      path: '/classroom'
+      fullPath: '/classroom'
+      preLoaderRoute: typeof ClassroomRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app': {
@@ -417,6 +512,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCommonMistakesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/classroom': {
+      id: '/app/classroom'
+      path: '/classroom'
+      fullPath: '/app/classroom'
+      preLoaderRoute: typeof AppClassroomRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/ai-tutor': {
       id: '/app/ai-tutor'
       path: '/ai-tutor'
@@ -445,6 +547,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppQuestionIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/classroom/$classId': {
+      id: '/app/classroom/$classId'
+      path: '/$classId'
+      fullPath: '/app/classroom/$classId'
+      preLoaderRoute: typeof AppClassroomClassIdRouteImport
+      parentRoute: typeof AppClassroomRoute
+    }
+    '/app/classroom-task/$classId': {
+      id: '/app/classroom-task/$classId'
+      path: '/classroom-task/$classId'
+      fullPath: '/app/classroom-task/$classId'
+      preLoaderRoute: typeof AppClassroomTaskClassIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/classroom-stream/$classId': {
+      id: '/app/classroom-stream/$classId'
+      path: '/classroom-stream/$classId'
+      fullPath: '/app/classroom-stream/$classId'
+      preLoaderRoute: typeof AppClassroomStreamClassIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/practice/$subject/$topic': {
       id: '/app/practice/$subject/$topic'
       path: '/practice/$subject/$topic'
@@ -452,11 +575,49 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPracticeSubjectTopicRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/classroom/$classId/stream': {
+      id: '/app/classroom/$classId/stream'
+      path: '/stream'
+      fullPath: '/app/classroom/$classId/stream'
+      preLoaderRoute: typeof AppClassroomClassIdStreamRouteImport
+      parentRoute: typeof AppClassroomClassIdRoute
+    }
+    '/app/classroom-assignment/$classId/$assignmentId': {
+      id: '/app/classroom-assignment/$classId/$assignmentId'
+      path: '/classroom-assignment/$classId/$assignmentId'
+      fullPath: '/app/classroom-assignment/$classId/$assignmentId'
+      preLoaderRoute: typeof AppClassroomAssignmentClassIdAssignmentIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
+interface AppClassroomClassIdRouteChildren {
+  AppClassroomClassIdStreamRoute: typeof AppClassroomClassIdStreamRoute
+}
+
+const AppClassroomClassIdRouteChildren: AppClassroomClassIdRouteChildren = {
+  AppClassroomClassIdStreamRoute: AppClassroomClassIdStreamRoute,
+}
+
+const AppClassroomClassIdRouteWithChildren =
+  AppClassroomClassIdRoute._addFileChildren(AppClassroomClassIdRouteChildren)
+
+interface AppClassroomRouteChildren {
+  AppClassroomClassIdRoute: typeof AppClassroomClassIdRouteWithChildren
+}
+
+const AppClassroomRouteChildren: AppClassroomRouteChildren = {
+  AppClassroomClassIdRoute: AppClassroomClassIdRouteWithChildren,
+}
+
+const AppClassroomRouteWithChildren = AppClassroomRoute._addFileChildren(
+  AppClassroomRouteChildren,
+)
+
 interface AppRouteChildren {
   AppAiTutorRoute: typeof AppAiTutorRoute
+  AppClassroomRoute: typeof AppClassroomRouteWithChildren
   AppCommonMistakesRoute: typeof AppCommonMistakesRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppFlashcardsRoute: typeof AppFlashcardsRoute
@@ -470,14 +631,18 @@ interface AppRouteChildren {
   AppStudyNotebookRoute: typeof AppStudyNotebookRoute
   AppSubjectsRoute: typeof AppSubjectsRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppClassroomStreamClassIdRoute: typeof AppClassroomStreamClassIdRoute
+  AppClassroomTaskClassIdRoute: typeof AppClassroomTaskClassIdRoute
   AppQuestionIdRoute: typeof AppQuestionIdRoute
   AppTopicsSubjectRoute: typeof AppTopicsSubjectRoute
   AppPracticeIndexRoute: typeof AppPracticeIndexRoute
+  AppClassroomAssignmentClassIdAssignmentIdRoute: typeof AppClassroomAssignmentClassIdAssignmentIdRoute
   AppPracticeSubjectTopicRoute: typeof AppPracticeSubjectTopicRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAiTutorRoute: AppAiTutorRoute,
+  AppClassroomRoute: AppClassroomRouteWithChildren,
   AppCommonMistakesRoute: AppCommonMistakesRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppFlashcardsRoute: AppFlashcardsRoute,
@@ -491,9 +656,13 @@ const AppRouteChildren: AppRouteChildren = {
   AppStudyNotebookRoute: AppStudyNotebookRoute,
   AppSubjectsRoute: AppSubjectsRoute,
   AppIndexRoute: AppIndexRoute,
+  AppClassroomStreamClassIdRoute: AppClassroomStreamClassIdRoute,
+  AppClassroomTaskClassIdRoute: AppClassroomTaskClassIdRoute,
   AppQuestionIdRoute: AppQuestionIdRoute,
   AppTopicsSubjectRoute: AppTopicsSubjectRoute,
   AppPracticeIndexRoute: AppPracticeIndexRoute,
+  AppClassroomAssignmentClassIdAssignmentIdRoute:
+    AppClassroomAssignmentClassIdAssignmentIdRoute,
   AppPracticeSubjectTopicRoute: AppPracticeSubjectTopicRoute,
 }
 
@@ -502,6 +671,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
+  ClassroomRoute: ClassroomRoute,
   LoginRoute: LoginRoute,
   SignupRoute: SignupRoute,
 }

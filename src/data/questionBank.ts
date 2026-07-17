@@ -10,6 +10,7 @@ import { CAMBRIDGE_PHYSICS_QUESTIONS } from "./cambridgePhysicsQuestions";
 import { DEMO_QUESTIONS } from "./demoQuestions";
 import { EDEXCEL_BIOLOGY_QUESTIONS } from "./edexcelBiologyQuestions";
 import { EDEXCEL_CHEMISTRY_QUESTIONS } from "./edexcelChemistryQuestions";
+import { ENGLISH_LITERATURE_QUESTIONS } from "./englishLiteratureQuestions";
 import { EDEXCEL_PHYSICS_QUESTIONS } from "./edexcelPhysicsQuestions";
 import { OCR_BIOLOGY_QUESTIONS } from "./ocrBiologyQuestions";
 import { OCR_CHEMISTRY_QUESTIONS } from "./ocrChemistryQuestions";
@@ -17,6 +18,7 @@ import { OXFORD_AQA_BIOLOGY_QUESTIONS } from "./oxfordAqaBiologyQuestions";
 import { OXFORD_AQA_CHEMISTRY_QUESTIONS } from "./oxfordAqaChemistryQuestions";
 import { OXFORD_AQA_PHYSICS_QUESTIONS } from "./oxfordAqaPhysicsQuestions";
 import { PAST_PAPER_QUESTIONS } from "./pastPaperQuestions";
+import { isProvidedQuestionCombo, PROVIDED_QUESTIONS } from "./providedQuestions";
 
 export type MarkPoint = {
   point: string;
@@ -52,7 +54,9 @@ export type Question = {
  * questions keep the competition demo usable without copying copyrighted papers.
  */
 export const QUESTION_BANK: Question[] = [
-  ...PAST_PAPER_QUESTIONS,
+  ...PROVIDED_QUESTIONS,
+  ...ENGLISH_LITERATURE_QUESTIONS,
+  ...PAST_PAPER_QUESTIONS.filter((q) => !isProvidedQuestionCombo(q)),
   ...EDEXCEL_BIOLOGY_QUESTIONS,
   ...EDEXCEL_CHEMISTRY_QUESTIONS,
   ...EDEXCEL_PHYSICS_QUESTIONS,
@@ -76,8 +80,10 @@ export const QUESTION_BANK: Question[] = [
   ),
   ...ALL_SUBJECT_TOPIC_PACK_QUESTIONS.filter(
     (q) =>
+      !isProvidedQuestionCombo(q) &&
       !(
         (q.examBoard === "edexcel-igcse" ||
+          q.examBoard === "cambridge-igcse" ||
           q.examBoard === "oxfordaqa-igcse" ||
           q.examBoard === "aqa-gcse" ||
           q.examBoard === "ocr-gcse") &&
@@ -89,10 +95,19 @@ export const QUESTION_BANK: Question[] = [
           q.examBoard === "aqa-gcse" ||
           q.examBoard === "oxfordaqa-igcse") &&
         q.subject === "physics"
+      ) &&
+      !(
+        (q.examBoard === "edexcel-igcse" ||
+          q.examBoard === "cambridge-igcse" ||
+          q.examBoard === "aqa-gcse" ||
+          q.examBoard === "oxfordaqa-igcse" ||
+          q.examBoard === "ocr-gcse") &&
+        q.subject === "english-literature"
       ),
   ),
   ...DEMO_QUESTIONS.filter(
     (q) =>
+      !isProvidedQuestionCombo(q) &&
       q.subject === "biology" &&
       q.examBoard !== "edexcel-igcse" &&
       q.examBoard !== "cambridge-igcse" &&
@@ -164,8 +179,24 @@ export function getQuestionSyllabusCode(question: Pick<Question, "examBoard" | "
   return getSyllabusCode(question.examBoard, question.subject);
 }
 
+function getLegacyEnglishLiteratureQuestion(id: string): Question | undefined {
+  const match = id.match(
+    /^(edexcel-igcse|cambridge-igcse|aqa-gcse|oxfordaqa-igcse|ocr-gcse)-english-literature-([a-z-]+)-(easy|medium|hard)-\d+$/,
+  );
+  if (!match) return undefined;
+
+  const [, examBoard, topic, difficulty] = match;
+  return QUESTION_BANK.find(
+    (q) =>
+      q.examBoard === examBoard &&
+      q.subject === "english-literature" &&
+      q.topic === topic &&
+      q.difficulty === difficulty,
+  );
+}
+
 export function getQuestion(id: string): Question | undefined {
-  return QUESTION_BANK.find((q) => q.id === id);
+  return QUESTION_BANK.find((q) => q.id === id) ?? getLegacyEnglishLiteratureQuestion(id);
 }
 
 export function getQuestionsByTopic(
