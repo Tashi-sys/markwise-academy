@@ -81,9 +81,9 @@ export const QUESTION_BANK: Question[] = [
   ...ALL_SUBJECT_TOPIC_PACK_QUESTIONS.filter(
     (q) =>
       !isProvidedQuestionCombo(q) &&
+      !BLOCK_GENERIC_FILLER_SUBJECTS.has(q.subject) &&
       !(
         (q.examBoard === "edexcel-igcse" ||
-          q.examBoard === "cambridge-igcse" ||
           q.examBoard === "oxfordaqa-igcse" ||
           q.examBoard === "aqa-gcse" ||
           q.examBoard === "ocr-gcse") &&
@@ -125,6 +125,20 @@ export type QuestionFilter = {
   topic?: string;
   difficulty?: Question["difficulty"];
 };
+
+const BLOCK_GENERIC_FILLER_SUBJECTS = new Set([
+  "english-language",
+  "english-language-a",
+  "english-language-b",
+  "english-literature",
+  "french",
+  "spanish",
+  "german",
+  "chinese",
+  "mandarin-chinese",
+  "japanese",
+  "arabic",
+]);
 
 const TOPIC_ALIASES: Record<string, string[]> = {
   cells: ["cell-structure", "cells-and-microscopes", "microscopy"],

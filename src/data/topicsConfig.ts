@@ -795,11 +795,33 @@ export function getTopicsForSubjectAndSyllabus({
   return getTopicsForSubject(subjectId);
 }
 
+export function humanizeTopicName(topicId: string): string {
+  const smallWords = new Set(["and", "or", "of", "the", "in", "to", "for", "with"]);
+  return topicId
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .map((word, index) => {
+      const lower = word.toLowerCase();
+      if (index > 0 && smallWords.has(lower)) return lower;
+      if (/^[a-z]\d$/i.test(word)) return word.toUpperCase();
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(" " );
+}
+
 export function getTopicMeta(
   subjectId: string,
   topicId: string,
   filter?: TopicMapFilter,
 ): TopicMeta {
   const topics = filter ? getTopicsForSubjectAndSyllabus(filter) : getTopicsForSubject(subjectId);
-  return topics[topicId] ?? getTopicsForSubject(subjectId)[topicId] ?? { name: topicId, blurb: "" };
+  return (
+    topics[topicId] ??
+    getTopicsForSubject(subjectId)[topicId] ?? {
+      name: humanizeTopicName(topicId),
+      blurb: "",
+    }
+  );
 }

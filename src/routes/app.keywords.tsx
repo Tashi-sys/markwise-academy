@@ -1,82 +1,254 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { BIOLOGY_KEYWORD_BANK } from "../data/examKeywordBank";
+import { useEffect, useMemo, useState } from "react";
+import { filterQuestions } from "../data/questionBank";
+import {
+  EXAM_BOARDS,
+  getExamBoard,
+  getQualificationLabel,
+  getSubjectName,
+  getSubjectsForBoard,
+  getSyllabusCode,
+  type ExamBoardId,
+} from "../data/syllabusConfig";
 import { getTopicMeta } from "../data/topicsConfig";
+import { useAuth } from "../lib/auth";
 
 export const Route = createFileRoute("/app/keywords")({
   component: ExamKeywords,
 });
 
+type KeywordEntry = {
+  keyword: string;
+  definition: string;
+  count: number;
+};
+
+const STOP_WORDS = new Set([
+  "and",
+  "are",
+  "because",
+  "between",
+  "from",
+  "have",
+  "into",
+  "that",
+  "their",
+  "there",
+  "this",
+  "with",
+  "will",
+  "would",
+]);
+
+function titleCase(value: string) {
+  return value
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function cleanKeyword(keyword: string) {
+  return keyword.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function keywordDefinition(keyword: string, sourceText: string) {
+  const sentence = sourceText
+    .split(/(?<=[.!?])\s+/)
+    .find((part) => part.toLowerCase().includes(keyword.toLowerCase()));
+
+  if (sentence && sentence.length <= 220) {
+    return sentence.trim();
+  }
+
+  return `Use “${keyword}” accurately in your answer and link it directly to the question context.`;
+}
+
+function deriveKeywords(questions: ReturnType<typeof filterQuestions>): KeywordEntry[] {
+  const entries = new Map<string, KeywordEntry>();
+
+  for (const question of questions) {
+    const candidates = [
+      ...question.examinerKeywords,
+      ...question.markSchemePoints.flatMap((point) => point.keywords.flat()),
+    ];
+
+    for (const raw of candidates) {
+      const keyword = cleanKeyword(raw);
+      if (keyword.length < 3 || STOP_WORDS.has(keyword) || /^\d+$/.test(keyword)) continue;
+
+      const existing = entries.get(keyword);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        entries.set(keyword, {
+          keyword,
+          definition: keywordDefinition(
+            keyword,
+            `${question.modelAnswer} ${question.markSchemePoints.map((p) => p.point).join(" ")}`,
+          ),
+          count: 1,
+        });
+      }
+    }
+  }
+
+  return [...entries.values()]
+    .sort((a, b) => b.count - a.count || a.keyword.localeCompare(b.keyword))
+    .slice(0, 48);
+}
+
 function ExamKeywords() {
-  const topics = Object.keys(BIOLOGY_KEYWORD_BANK);
-  const [topic, setTopic] = useState(topics[0] ?? "ecology");
-  const [selected, setSelected] = useState(BIOLOGY_KEYWORD_BANK[topic]?.[0]?.keyword ?? "");
-  const keywords = BIOLOGY_KEYWORD_BANK[topic] ?? [];
+  const { user } = useAuth();
+  const [board, setBoard] = useState<ExamBoardId>(user?.examBoard ?? "edexcel-igcse");
+  const subjects = getSubjectsForBoard(board);
+  const [subject, setSubject] = useState(user?.selectedSubjects[0] ?? subjects[0]?.id ?? "biology");
+
+  const syllabusCode = getSyllabusCode(board, subject);
+  const boardInfo = getExamBoard(board);
+  const qualification = boardInfo?.qualification ?? user?.qualification ?? "IGCSE";
+  const questions = useMemo(
+    () => filterQuestions({ examBoard: board, qualification, subject, syllabusCode }),
+    [board, qualification, subject, syllabusCode],
+  );
+  const topics = useMemo(() => [...new Set(questions.map((question) => question.topic))], [questions]);
+  const [topic, setTopic] = useState(topics[0] ?? "");
+
+  useEffect(() => {
+    const nextSubjects = getSubjectsForBoard(board);
+    if (!nextSubjects.some((item) => item.id === subject)) {
+      setSubject(nextSubjects[0]?.id ?? "biology");
+    }
+  }, [board, subject]);
+
+  useEffect(() => {
+    if (!topics.includes(topic)) {
+      setTopic(topics[0] ?? "");
+    }
+  }, [topics, topic]);
+
+  const topicQuestions = topic ? questions.filter((question) => question.topic === topic) : questions;
+  const keywords = useMemo(() => deriveKeywords(topicQuestions), [topicQuestions]);
+  const [selected, setSelected] = useState("");
+
+  useEffect(() => {
+    if (!keywords.some((item) => item.keyword === selected)) {
+      setSelected(keywords[0]?.keyword ?? "");
+    }
+  }, [keywords, selected]);
+
   const entry = keywords.find((item) => item.keyword === selected) ?? keywords[0];
+  const subjectName = getSubjectName(board, subject);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Exam Keywords</h1>
         <p className="mt-1 text-muted-foreground">
-          Biology phrases students need to write in markscheme language.
+          Markscheme language from the selected syllabus and subject question bank.
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {topics.map((id) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => {
-              setTopic(id);
-              setSelected(BIOLOGY_KEYWORD_BANK[id]?.[0]?.keyword ?? "");
-            }}
-            className={`rounded-full border px-4 py-2 text-sm font-medium ${
-              topic === id
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-card hover:bg-secondary"
-            }`}
+      <div className="grid gap-3 rounded-2xl border border-border bg-card p-4 shadow-soft md:grid-cols-3">
+        <label className="space-y-1 text-sm">
+          <span className="font-medium text-muted-foreground">Exam board</span>
+          <select
+            value={board}
+            onChange={(event) => setBoard(event.target.value as ExamBoardId)}
+            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-foreground"
           >
-            {getTopicMeta("biology", id).name}
-          </button>
-        ))}
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-          <div className="grid gap-2 sm:grid-cols-2">
-            {keywords.map((item) => (
-              <button
-                key={item.keyword}
-                type="button"
-                onClick={() => setSelected(item.keyword)}
-                className={`rounded-xl border p-3 text-left text-sm transition ${
-                  selected === item.keyword
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border bg-background hover:bg-secondary"
-                }`}
-              >
-                {item.keyword}
-              </button>
+            {EXAM_BOARDS.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
             ))}
+          </select>
+        </label>
+
+        <label className="space-y-1 text-sm">
+          <span className="font-medium text-muted-foreground">Subject</span>
+          <select
+            value={subject}
+            onChange={(event) => setSubject(event.target.value)}
+            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-foreground"
+          >
+            {subjects.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="rounded-xl border border-border bg-background/60 px-3 py-2 text-sm">
+          <div className="font-medium text-muted-foreground">Active syllabus</div>
+          <div className="mt-1 font-semibold">
+            {subjectName} · {getQualificationLabel(qualification)} {syllabusCode ? `· ${syllabusCode}` : ""}
           </div>
         </div>
-
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
-          {entry ? (
-            <>
-              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Definition
-              </div>
-              <h2 className="mt-2 text-2xl font-bold">{entry.keyword}</h2>
-              <p className="mt-3 leading-relaxed text-muted-foreground">{entry.definition}</p>
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">No keywords for this topic yet.</p>
-          )}
-        </div>
       </div>
+
+      {topics.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {topics.map((id) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTopic(id)}
+              className={
+                topic === id
+                  ? "rounded-full border border-primary bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+                  : "rounded-full border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-secondary"
+              }
+            >
+              {getTopicMeta(subject, id, { examBoard: board, qualification, subjectId: subject, syllabusCode }).name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {keywords.length === 0 ? (
+        <div className="rounded-2xl border border-border bg-card p-10 text-center shadow-soft">
+          <h2 className="text-xl font-semibold">No exam keywords for this selection yet.</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+            Add question data for {subjectName} and the keyword bank will populate from examiner keywords and mark scheme points.
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {keywords.map((item) => (
+                <button
+                  key={item.keyword}
+                  type="button"
+                  onClick={() => setSelected(item.keyword)}
+                  className={
+                    selected === item.keyword
+                      ? "rounded-xl border border-primary bg-primary/10 p-3 text-left text-sm text-primary transition"
+                      : "rounded-xl border border-border bg-background p-3 text-left text-sm transition hover:bg-secondary"
+                  }
+                >
+                  <span className="font-medium">{titleCase(item.keyword)}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">{item.count}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
+            {entry && (
+              <>
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Markscheme use
+                </div>
+                <h2 className="mt-2 text-2xl font-bold">{titleCase(entry.keyword)}</h2>
+                <p className="mt-3 leading-relaxed text-muted-foreground">{entry.definition}</p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
