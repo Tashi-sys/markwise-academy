@@ -1,16 +1,15 @@
-import { createFileRoute, Link, useNavigate, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { AuthError, AuthField, AuthLayout, authInputClass } from "../components/auth/AuthLayout";
 import { getCurrentUser, signup } from "../lib/auth";
 import type { ExamBoardId, Qualification } from "../data/syllabusConfig";
-import { EXAM_BOARDS, getBoardsForQualification, getExamBoard } from "../data/syllabusConfig";
-import { getSyllabusSubjects } from "../data/miniPaperConfig";
+import { EXAM_BOARDS, getExamBoard, getQualificationLabel } from "../data/syllabusConfig";
 import { subjectHasQuestions } from "../data/questionBank";
 
 export const Route = createFileRoute("/signup")({
   head: () => ({
-    meta: [{ title: "Sign up — MarkWise" }],
+    meta: [{ title: "Sign up - MarkWise" }],
   }),
   beforeLoad: () => {
     if (typeof window !== "undefined" && getCurrentUser()) {
@@ -20,7 +19,27 @@ export const Route = createFileRoute("/signup")({
   component: SignupPage,
 });
 
-const STEPS = ["Account", "Syllabus", "Subjects"] as const;
+const STEPS = ["Account", "Subjects"] as const;
+
+type SignupSubjectOption = {
+  key: string;
+  id: string;
+  name: string;
+  examBoard: ExamBoardId;
+  boardName: string;
+  qualification: Qualification;
+};
+
+const SIGNUP_SUBJECT_OPTIONS: SignupSubjectOption[] = EXAM_BOARDS.flatMap((board) =>
+  board.subjects.map((subject) => ({
+    key: `${board.id}:${subject.id}`,
+    id: subject.id,
+    name: subject.name,
+    examBoard: board.id,
+    boardName: board.name,
+    qualification: board.qualification,
+  })),
+);
 
 function SignupPage() {
   const navigate = useNavigate();
@@ -39,21 +58,38 @@ function SignupPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const boards = EXAM_BOARDS;
-  const subjects = useMemo(() => getSyllabusSubjects(examBoard), [examBoard]);
   const boardMeta = getExamBoard(examBoard);
+  const selectedSubjectKeys = useMemo(
+    () => selectedSubjects.map((subjectId) => `${examBoard}:${subjectId}`),
+    [examBoard, selectedSubjects],
+  );
+  const visibleSubjectOptions = useMemo(
+    () =>
+      selectedSubjects.length > 0
+        ? SIGNUP_SUBJECT_OPTIONS.filter((option) => option.examBoard === examBoard)
+        : SIGNUP_SUBJECT_OPTIONS,
+    [examBoard, selectedSubjects.length],
+  );
 
-  const onQualificationChange = (q: Qualification) => {
-    setQualification(q);
-    const nextBoards = getBoardsForQualification(q);
-    setExamBoard(nextBoards[0]?.id ?? "cambridge-igcse");
-    setSelectedSubjects([]);
+  const toggleSubject = (option: SignupSubjectOption) => {
+    if (selectedSubjects.length === 0) {
+      setExamBoard(option.examBoard);
+      setQualification(option.qualification);
+      setWeakestSubject(option.id);
+    }
+
+    setSelectedSubjects((prev) => {
+      const next = prev.includes(option.id)
+        ? prev.filter((subjectId) => subjectId !== option.id)
+        : [...prev, option.id];
+      setWeakestSubject(next[0] ?? option.id);
+      return next;
+    });
   };
 
-  const toggleSubject = (id: string) => {
-    setSelectedSubjects((prev) =>
-      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
-    );
+  const resetSyllabusChoice = () => {
+    setSelectedSubjects([]);
+    setWeakestSubject("biology");
   };
 
   const nextStep = () => {
@@ -63,7 +99,6 @@ function SignupPage() {
       if (!email.includes("@")) return setError("Please enter a valid email.");
       if (password.length < 6) return setError("Password must be at least 6 characters.");
     }
-    if (step === 1 && !examBoard) return setError("Please select an exam board.");
     setStep((s) => Math.min(s + 1, STEPS.length - 1));
   };
 
@@ -83,7 +118,7 @@ function SignupPage() {
       examBoard,
       selectedSubjects,
       targetGrade,
-      weakestSubject,
+      weakestSubject: selectedSubjects[0] ?? weakestSubject,
       preferredPracticeMode,
     });
     setLoading(false);
@@ -97,7 +132,7 @@ function SignupPage() {
   return (
     <AuthLayout
       title="Create your MarkWise account"
-      subtitle="Three quick steps — then you only see questions from your syllabus."
+      subtitle="Pick your subjects with the syllabus shown in brackets. MarkWise saves the syllabus automatically."
       footer={
         <>
           Already have an account?{" "}
@@ -107,7 +142,6 @@ function SignupPage() {
         </>
       }
     >
-      {/* Step indicator */}
       <div className="mb-6 flex items-center justify-between gap-2">
         {STEPS.map((label, i) => (
           <div key={label} className="flex flex-1 flex-col items-center gap-1">
@@ -163,37 +197,22 @@ function SignupPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className={authInputClass}
-                placeholder="••••••••"
+                placeholder="Password"
               />
             </AuthField>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <AuthField label="Target grade">
-                <select
-                  value={targetGrade}
-                  onChange={(e) => setTargetGrade(e.target.value)}
-                  className={authInputClass}
-                >
-                  {["4/5", "6", "7", "8/9", "A/A*"].map((grade) => (
-                    <option key={grade} value={grade}>
-                      {grade}
-                    </option>
-                  ))}
-                </select>
-              </AuthField>
-              <AuthField label="Weakest subject">
-                <select
-                  value={weakestSubject}
-                  onChange={(e) => setWeakestSubject(e.target.value)}
-                  className={authInputClass}
-                >
-                  {subjects.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </AuthField>
-            </div>
+            <AuthField label="Target grade">
+              <select
+                value={targetGrade}
+                onChange={(e) => setTargetGrade(e.target.value)}
+                className={authInputClass}
+              >
+                {["4/5", "6", "7", "8/9", "A/A*"].map((grade) => (
+                  <option key={grade} value={grade}>
+                    {grade}
+                  </option>
+                ))}
+              </select>
+            </AuthField>
             <AuthField label="Preferred practice mode">
               <div className="grid gap-2 sm:grid-cols-3">
                 {[
@@ -223,85 +242,60 @@ function SignupPage() {
 
         {step === 1 && (
           <>
-            <AuthField label="Qualification level">
-              <div className="flex gap-2">
-                {(["GCSE", "IGCSE"] as Qualification[]).map((q) => (
-                  <button
-                    key={q}
-                    type="button"
-                    onClick={() => onQualificationChange(q)}
-                    className={`flex-1 rounded-full border px-3 py-2 text-sm font-medium transition ${
-                      qualification === q
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-background hover:bg-secondary"
-                    }`}
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
-            </AuthField>
-            <AuthField label="Exam board / syllabus" hint="AQA and OCR are GCSE exam boards.">
-              <select
-                value={examBoard}
-                onChange={(e) => {
-                  const nextBoard = e.target.value as ExamBoardId;
-                  setExamBoard(nextBoard);
-                  setQualification(getExamBoard(nextBoard)?.qualification ?? qualification);
-                  setSelectedSubjects([]);
-                }}
-                className={authInputClass}
-              >
-                {boards.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name} ({b.qualification})
-                  </option>
-                ))}
-              </select>
-            </AuthField>
-            {boardMeta && (
-              <div className="rounded-lg border border-border bg-secondary/40 p-3 text-sm text-muted-foreground">
-                You selected <strong className="text-foreground">{boardMeta.name}</strong>.
-                Questions will be filtered to this syllabus only.
-              </div>
-            )}
-          </>
-        )}
-
-        {step === 2 && (
-          <>
             <AuthField
               label="Subjects studied"
-              hint={`Select all ${boardMeta?.name ?? "syllabus"} subjects you're taking`}
+              hint="Choose subjects with the syllabus in brackets. Your first choice sets the syllabus for this account."
             >
-              <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-border bg-background p-2">
-                {subjects.map((s) => {
-                  const checked = selectedSubjects.includes(s.id);
-                  const hasQ = subjectHasQuestions(examBoard, s.id, qualification);
+              <div className="max-h-72 space-y-1 overflow-y-auto rounded-lg border border-border bg-background p-2">
+                {visibleSubjectOptions.map((subject) => {
+                  const checked = selectedSubjectKeys.includes(subject.key);
+                  const hasQuestions = subjectHasQuestions(
+                    subject.examBoard,
+                    subject.id,
+                    subject.qualification,
+                  );
+
                   return (
                     <label
-                      key={s.id}
+                      key={subject.key}
                       className={`flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-2 text-sm transition ${
                         checked ? "bg-primary/10 text-primary" : "hover:bg-secondary"
                       }`}
                     >
-                      <span className="flex items-center gap-2">
+                      <span className="flex min-w-0 items-center gap-2">
                         <input
                           type="checkbox"
                           checked={checked}
-                          onChange={() => toggleSubject(s.id)}
+                          onChange={() => toggleSubject(subject)}
                           className="rounded border-border"
                         />
-                        {s.name}
+                        <span className="truncate">
+                          {subject.name} ({subject.boardName})
+                        </span>
                       </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {hasQ ? "Past papers" : "No papers"}
+                      <span className="shrink-0 text-[10px] text-muted-foreground">
+                        {hasQuestions ? "Past papers" : "No papers"}
                       </span>
                     </label>
                   );
                 })}
               </div>
             </AuthField>
+
+            {boardMeta && selectedSubjects.length > 0 && (
+              <div className="rounded-lg border border-border bg-secondary/40 p-3 text-sm text-muted-foreground">
+                Saved syllabus: <strong className="text-foreground">{boardMeta.name}</strong>{" "}
+                ({getQualificationLabel(qualification)}). Questions will be filtered to this
+                syllabus only.
+                <button
+                  type="button"
+                  onClick={resetSyllabusChoice}
+                  className="ml-2 font-medium text-primary hover:underline"
+                >
+                  Change syllabus
+                </button>
+              </div>
+            )}
           </>
         )}
 
@@ -320,11 +314,7 @@ function SignupPage() {
             disabled={loading}
             className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-primary py-2.5 text-sm font-semibold text-primary-foreground shadow-glow hover:bg-primary/90 disabled:opacity-60"
           >
-            {loading
-              ? "Creating account…"
-              : step === STEPS.length - 1
-                ? "Create account"
-                : "Continue"}
+            {loading ? "Creating account..." : step === STEPS.length - 1 ? "Create account" : "Continue"}
             {step < STEPS.length - 1 && !loading && <ArrowRight className="h-4 w-4" />}
           </button>
         </div>
