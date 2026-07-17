@@ -143,7 +143,10 @@ function ExamKeywords() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Exam Keywords</h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-3xl font-bold tracking-tight">Exam Keywords</h1>
+          <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">Syllabus-aware v2</span>
+        </div>
         <p className="mt-1 text-muted-foreground">
           Markscheme language from the selected syllabus and subject question bank.
         </p>
