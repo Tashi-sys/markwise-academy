@@ -101,12 +101,31 @@ function deriveKeywords(questions: ReturnType<typeof filterQuestions>): KeywordE
 function ExamKeywords() {
   const { user } = useAuth();
   const [board, setBoard] = useState<ExamBoardId>(user?.examBoard ?? "edexcel-igcse");
-  const subjects = getSubjectsForBoard(board);
-  const [subject, setSubject] = useState(user?.selectedSubjects[0] ?? subjects[0]?.id ?? "biology");
+  const boardSubjects = getSubjectsForBoard(board);
+  const [subject, setSubject] = useState(user?.selectedSubjects[0] ?? boardSubjects[0]?.id ?? "biology");
 
-  const syllabusCode = getSyllabusCode(board, subject);
   const boardInfo = getExamBoard(board);
   const qualification = boardInfo?.qualification ?? user?.qualification ?? "IGCSE";
+  const availableSubjects = useMemo(
+    () =>
+      boardSubjects
+        .map((item) => {
+          const itemSyllabusCode = getSyllabusCode(board, item.id);
+          const count = filterQuestions({
+            examBoard: board,
+            qualification,
+            subject: item.id,
+            syllabusCode: itemSyllabusCode,
+          }).length;
+
+          return { ...item, count };
+        })
+        .filter((item) => item.count > 0),
+    [board, boardSubjects, qualification],
+  );
+
+  const subjectOptions = availableSubjects.length > 0 ? availableSubjects : boardSubjects.map((item) => ({ ...item, count: 0 }));
+  const syllabusCode = getSyllabusCode(board, subject);
   const questions = useMemo(
     () => filterQuestions({ examBoard: board, qualification, subject, syllabusCode }),
     [board, qualification, subject, syllabusCode],
@@ -115,11 +134,10 @@ function ExamKeywords() {
   const [topic, setTopic] = useState(topics[0] ?? "");
 
   useEffect(() => {
-    const nextSubjects = getSubjectsForBoard(board);
-    if (!nextSubjects.some((item) => item.id === subject)) {
-      setSubject(nextSubjects[0]?.id ?? "biology");
+    if (!subjectOptions.some((item) => item.id === subject)) {
+      setSubject(subjectOptions[0]?.id ?? "biology");
     }
-  }, [board, subject]);
+  }, [subjectOptions, subject]);
 
   useEffect(() => {
     if (!topics.includes(topic)) {
@@ -175,9 +193,9 @@ function ExamKeywords() {
             onChange={(event) => setSubject(event.target.value)}
             className="w-full rounded-xl border border-border bg-background px-3 py-2 text-foreground"
           >
-            {subjects.map((item) => (
+            {subjectOptions.map((item) => (
               <option key={item.id} value={item.id}>
-                {item.name}
+                {item.count > 0 ? item.name + " (" + item.count + ")" : item.name}
               </option>
             ))}
           </select>
