@@ -47,6 +47,20 @@ export type Question = {
   examinerTip: string;
 };
 
+const BLOCK_GENERIC_FILLER_SUBJECTS = new Set([
+  "english-language",
+  "english-language-a",
+  "english-language-b",
+  "english-literature",
+  "french",
+  "spanish",
+  "german",
+  "chinese",
+  "mandarin-chinese",
+  "japanese",
+  "arabic",
+]);
+
 /**
  * Live question bank.
  *
@@ -125,20 +139,6 @@ export type QuestionFilter = {
   topic?: string;
   difficulty?: Question["difficulty"];
 };
-
-const BLOCK_GENERIC_FILLER_SUBJECTS = new Set([
-  "english-language",
-  "english-language-a",
-  "english-language-b",
-  "english-literature",
-  "french",
-  "spanish",
-  "german",
-  "chinese",
-  "mandarin-chinese",
-  "japanese",
-  "arabic",
-]);
 
 const TOPIC_ALIASES: Record<string, string[]> = {
   cells: ["cell-structure", "cells-and-microscopes", "microscopy"],
