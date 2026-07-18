@@ -54,13 +54,6 @@ type RecentActivityItem = {
 };
 
 
-const MOCK_DAILY_STREAK = {
-  currentStreak: 5,
-  bestStreak: 12,
-  completedToday: false,
-  dailyGoal: 10,
-  questionsCompletedToday: 4,
-};
 
 const MOCK_RECENT_ACTIVITY: RecentActivityItem[] = [
   {
@@ -111,14 +104,10 @@ function Dashboard() {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayAttempts = userAttempts.filter((attempt) => attempt.date >= todayStart.getTime());
-  const questionsCompletedToday =
-    todayAttempts.length ||
-    (totalQ > 0
-      ? Math.min(MOCK_DAILY_STREAK.questionsCompletedToday, totalQ)
-      : MOCK_DAILY_STREAK.questionsCompletedToday);
+  const questionsCompletedToday = todayAttempts.length;
   const dailyGoal = 10;
   const completedToday = questionsCompletedToday >= dailyGoal;
-  const bestStreak = Math.max(MOCK_DAILY_STREAK.bestStreak, streak);
+  const bestStreak = streak;
   const todayGoalProgress = Math.min(100, Math.round((questionsCompletedToday / dailyGoal) * 100));
   const xp = totalScore * 20 + totalQ * 10 + streak * 15;
   const level = Math.max(1, Math.floor(xp / 250) + 1);
@@ -349,7 +338,7 @@ function Dashboard() {
       <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-1">
           <DailyStreakCard
-            currentStreak={streak || MOCK_DAILY_STREAK.currentStreak}
+            currentStreak={streak}
             bestStreak={bestStreak}
             completedToday={completedToday}
             dailyGoal={dailyGoal}
