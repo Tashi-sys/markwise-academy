@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { AuthError, AuthField, AuthLayout, authInputClass } from "../components/auth/AuthLayout";
 import { getCurrentUser, signup } from "../lib/auth";
 import type { ExamBoardId, Qualification } from "../data/syllabusConfig";
-import { EXAM_BOARDS, getExamBoard, getQualificationLabel } from "../data/syllabusConfig";
+import { EXAM_BOARDS, getExamBoard } from "../data/syllabusConfig";
 import { subjectHasQuestions } from "../data/questionBank";
 
 export const Route = createFileRoute("/signup")({
@@ -49,7 +49,7 @@ function SignupPage() {
   const [password, setPassword] = useState("");
   const [qualification, setQualification] = useState<Qualification>("IGCSE");
   const [examBoard, setExamBoard] = useState<ExamBoardId>("cambridge-igcse");
-  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [selectedSubjectKeys, setSelectedSubjectKeys] = useState<string[]>([]);
   const [targetGrade, setTargetGrade] = useState("8/9");
   const [weakestSubject, setWeakestSubject] = useState("biology");
   const [preferredPracticeMode, setPreferredPracticeMode] = useState<"practice" | "exam" | "mixed">(
@@ -58,38 +58,32 @@ function SignupPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const boardMeta = getExamBoard(examBoard);
-  const selectedSubjectKeys = useMemo(
-    () => selectedSubjects.map((subjectId) => `${examBoard}:${subjectId}`),
-    [examBoard, selectedSubjects],
-  );
-  const visibleSubjectOptions = useMemo(
+  const selectedOptions = useMemo(
     () =>
-      selectedSubjects.length > 0
-        ? SIGNUP_SUBJECT_OPTIONS.filter((option) => option.examBoard === examBoard)
-        : SIGNUP_SUBJECT_OPTIONS,
-    [examBoard, selectedSubjects.length],
+      selectedSubjectKeys
+        .map((key) => SIGNUP_SUBJECT_OPTIONS.find((option) => option.key === key))
+        .filter((option): option is SignupSubjectOption => Boolean(option)),
+    [selectedSubjectKeys],
+  );
+  const selectedBoardNames = useMemo(
+    () => [...new Set(selectedOptions.map((option) => getExamBoard(option.examBoard)?.name ?? option.boardName))],
+    [selectedOptions],
   );
 
   const toggleSubject = (option: SignupSubjectOption) => {
-    if (selectedSubjects.length === 0) {
-      setExamBoard(option.examBoard);
-      setQualification(option.qualification);
-      setWeakestSubject(option.id);
-    }
+    setSelectedSubjectKeys((prev) => {
+      const next = prev.includes(option.key)
+        ? prev.filter((key) => key !== option.key)
+        : [...prev, option.key];
+      const nextFirst = next
+        .map((key) => SIGNUP_SUBJECT_OPTIONS.find((item) => item.key === key))
+        .find(Boolean);
 
-    setSelectedSubjects((prev) => {
-      const next = prev.includes(option.id)
-        ? prev.filter((subjectId) => subjectId !== option.id)
-        : [...prev, option.id];
-      setWeakestSubject(next[0] ?? option.id);
+      setExamBoard(nextFirst?.examBoard ?? option.examBoard);
+      setQualification(nextFirst?.qualification ?? option.qualification);
+      setWeakestSubject(nextFirst?.id ?? option.id);
       return next;
     });
-  };
-
-  const resetSyllabusChoice = () => {
-    setSelectedSubjects([]);
-    setWeakestSubject("biology");
   };
 
   const nextStep = () => {
@@ -108,17 +102,24 @@ function SignupPage() {
       nextStep();
       return;
     }
+
+    const primary = selectedOptions[0];
     setLoading(true);
     setError("");
     const result = signup({
       name,
       email,
       password,
-      qualification,
-      examBoard,
-      selectedSubjects,
+      qualification: primary?.qualification ?? qualification,
+      examBoard: primary?.examBoard ?? examBoard,
+      selectedSubjects: [...new Set(selectedOptions.map((option) => option.id))],
+      subjectSyllabuses: selectedOptions.map((option) => ({
+        subject: option.id,
+        examBoard: option.examBoard,
+        qualification: option.qualification,
+      })),
       targetGrade,
-      weakestSubject: selectedSubjects[0] ?? weakestSubject,
+      weakestSubject: primary?.id ?? weakestSubject,
       preferredPracticeMode,
     });
     setLoading(false);
@@ -132,7 +133,7 @@ function SignupPage() {
   return (
     <AuthLayout
       title="Create your MarkWise account"
-      subtitle="Pick your subjects with the syllabus shown in brackets. MarkWise saves the syllabus automatically."
+      subtitle="Pick your subjects with the syllabus shown in brackets. MarkWise saves each subject's syllabus."
       footer={
         <>
           Already have an account?{" "}
@@ -244,10 +245,10 @@ function SignupPage() {
           <>
             <AuthField
               label="Subjects studied"
-              hint="Choose subjects with the syllabus in brackets. Your first choice sets the syllabus for this account."
+              hint="You can select subjects from different syllabuses. Each one keeps the syllabus shown in brackets."
             >
               <div className="max-h-72 space-y-1 overflow-y-auto rounded-lg border border-border bg-background p-2">
-                {visibleSubjectOptions.map((subject) => {
+                {SIGNUP_SUBJECT_OPTIONS.map((subject) => {
                   const checked = selectedSubjectKeys.includes(subject.key);
                   const hasQuestions = subjectHasQuestions(
                     subject.examBoard,
@@ -282,18 +283,10 @@ function SignupPage() {
               </div>
             </AuthField>
 
-            {boardMeta && selectedSubjects.length > 0 && (
+            {selectedOptions.length > 0 && (
               <div className="rounded-lg border border-border bg-secondary/40 p-3 text-sm text-muted-foreground">
-                Saved syllabus: <strong className="text-foreground">{boardMeta.name}</strong>{" "}
-                ({getQualificationLabel(qualification)}). Questions will be filtered to this
-                syllabus only.
-                <button
-                  type="button"
-                  onClick={resetSyllabusChoice}
-                  className="ml-2 font-medium text-primary hover:underline"
-                >
-                  Change syllabus
-                </button>
+                Saved selections: <strong className="text-foreground">{selectedOptions.length}</strong>{" "}
+                subject{selectedOptions.length === 1 ? "" : "s"} across {selectedBoardNames.join(", ")}.
               </div>
             )}
           </>

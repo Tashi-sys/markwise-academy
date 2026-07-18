@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ExamBoardId, Qualification } from "../data/syllabusConfig";
 
+export type SubjectSyllabusSelection = {
+  subject: string;
+  examBoard: ExamBoardId;
+  qualification: Qualification;
+};
+
 export type UserProfile = {
   id: string;
   name: string;
@@ -8,6 +14,7 @@ export type UserProfile = {
   qualification: Qualification;
   examBoard: ExamBoardId;
   selectedSubjects: string[];
+  subjectSyllabuses: SubjectSyllabusSelection[];
   targetGrade: string;
   weakestSubject: string;
   preferredPracticeMode: "practice" | "exam" | "mixed";
@@ -48,12 +55,24 @@ function writeSessionId(id: string | null) {
   window.dispatchEvent(new Event(AUTH_EVENT));
 }
 
+function normaliseUser(user: StoredUser): StoredUser {
+  if (user.subjectSyllabuses?.length) return user;
+  return {
+    ...user,
+    subjectSyllabuses: user.selectedSubjects.map((subject) => ({
+      subject,
+      examBoard: user.examBoard,
+      qualification: user.qualification,
+    })),
+  };
+}
+
 export function getCurrentUser(): UserProfile | null {
   const sessionId = readSessionId();
   if (!sessionId) return null;
   const user = readUsers().find((u) => u.id === sessionId);
   if (!user) return null;
-  const { password: _, ...profile } = user;
+  const { password: _, ...profile } = normaliseUser(user);
   return profile;
 }
 
@@ -68,6 +87,7 @@ export type SignupInput = {
   qualification: Qualification;
   examBoard: ExamBoardId;
   selectedSubjects: string[];
+  subjectSyllabuses?: SubjectSyllabusSelection[];
   targetGrade: string;
   weakestSubject: string;
   preferredPracticeMode: "practice" | "exam" | "mixed";
@@ -97,6 +117,14 @@ export function signup(input: SignupInput): AuthResult {
     qualification: input.qualification,
     examBoard: input.examBoard,
     selectedSubjects: input.selectedSubjects,
+    subjectSyllabuses:
+      input.subjectSyllabuses?.length
+        ? input.subjectSyllabuses
+        : input.selectedSubjects.map((subject) => ({
+            subject,
+            examBoard: input.examBoard,
+            qualification: input.qualification,
+          })),
     targetGrade: input.targetGrade,
     weakestSubject: input.weakestSubject,
     preferredPracticeMode: input.preferredPracticeMode,
@@ -128,7 +156,7 @@ export function updateUserProfile(
   updates: Partial<
     Pick<
       UserProfile,
-      "selectedSubjects" | "name" | "targetGrade" | "weakestSubject" | "preferredPracticeMode"
+      "selectedSubjects" | "subjectSyllabuses" | "name" | "targetGrade" | "weakestSubject" | "preferredPracticeMode"
     >
   >,
 ): AuthResult {
@@ -177,7 +205,7 @@ export type AuthProvider = {
     updates: Partial<
       Pick<
         UserProfile,
-        "selectedSubjects" | "name" | "targetGrade" | "weakestSubject" | "preferredPracticeMode"
+        "selectedSubjects" | "subjectSyllabuses" | "name" | "targetGrade" | "weakestSubject" | "preferredPracticeMode"
       >
     >,
   ) => Promise<AuthResult>;
