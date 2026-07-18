@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 import type { ExamBoardId, Qualification } from "../data/syllabusConfig";
 import { filterQuestions, type Question } from "../data/questionBank";
 import { getCurrentUser } from "./auth";
+import { db } from "./firebase";
 
 export type ClassroomRole = "teacher" | "student";
 export type ClassroomAssignmentType =
@@ -105,6 +107,7 @@ export type AssignmentQuestionFilter = {
 
 const STORAGE_KEY = "markwise:classroom-hub:v1";
 const EVENT_NAME = "markwise:classroom-hub:changed";
+const FIRESTORE_COLLECTION = "markwiseClassroomStates";
 
 const EMPTY_STATE: ClassroomState = {
   classrooms: [],
@@ -144,10 +147,15 @@ function readState(): ClassroomState {
   return safeParseState(window.localStorage.getItem(STORAGE_KEY));
 }
 
-function writeState(state: ClassroomState) {
+function writeLocalState(state: ClassroomState) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   window.dispatchEvent(new Event(EVENT_NAME));
+}
+
+function writeState(state: ClassroomState) {
+  writeLocalState(state);
+  void saveClassroomStateToFirebase(state);
 }
 
 function randomId(prefix: string) {
@@ -193,6 +201,72 @@ function scopeStateToCurrentUser(state: ClassroomState): ClassroomState {
     assignments: state.assignments.filter((assignment) => classIds.has(assignment.classId)),
     submissions: state.submissions.filter((submission) => assignmentIds.has(submission.assignmentId)),
   };
+}
+
+function firestoreUserId() {
+  const user = getCurrentUser();
+  return user?.id ?? null;
+}
+
+function cleanForFirestore(state: ClassroomState): ClassroomState {
+  return JSON.parse(JSON.stringify(scopeStateToCurrentUser(state))) as ClassroomState;
+}
+
+async function saveClassroomStateToFirebase(state: ClassroomState) {
+  if (typeof window === "undefined") return;
+  const userId = firestoreUserId();
+  if (!userId) return;
+  try {
+    await setDoc(
+      doc(db, FIRESTORE_COLLECTION, userId),
+      {
+        ...cleanForFirestore(state),
+        userId,
+        updatedAt: Date.now(),
+      },
+      { merge: true },
+    );
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.warn("MarkWise classroom Firebase save failed. Using localStorage fallback.", error);
+    }
+  }
+}
+
+async function loadClassroomStateFromFirebase() {
+  if (typeof window === "undefined") return null;
+  const userId = firestoreUserId();
+  if (!userId) return null;
+  try {
+    const snapshot = await getDoc(doc(db, FIRESTORE_COLLECTION, userId));
+    if (!snapshot.exists()) return null;
+    return safeParseState(JSON.stringify(snapshot.data()));
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.warn("MarkWise classroom Firebase load failed. Using localStorage fallback.", error);
+    }
+    return null;
+  }
+}
+
+function subscribeToFirebaseClassroomState(onState: (state: ClassroomState) => void) {
+  if (typeof window === "undefined") return () => {};
+  const userId = firestoreUserId();
+  if (!userId) return () => {};
+  return onSnapshot(
+    doc(db, FIRESTORE_COLLECTION, userId),
+    (snapshot) => {
+      if (!snapshot.exists()) return;
+      const remoteState = safeParseState(JSON.stringify(snapshot.data()));
+      writeLocalState(remoteState);
+      onState(scopeStateToCurrentUser(remoteState));
+    },
+    (error) => {
+      if (import.meta.env.DEV) {
+        console.warn("MarkWise classroom Firebase subscription failed. Using localStorage fallback.", error);
+      }
+    },
+  );
 }
 
 export function getClassrooms(): Classroom[] {
@@ -424,10 +498,17 @@ export function useClassroomHub() {
   useEffect(() => {
     const sync = () => setState(scopeStateToCurrentUser(readState()));
     sync();
+    void loadClassroomStateFromFirebase().then((remoteState) => {
+      if (!remoteState) return;
+      writeLocalState(remoteState);
+      setState(scopeStateToCurrentUser(remoteState));
+    });
+    const unsubscribeFirebase = subscribeToFirebaseClassroomState(setState);
     window.addEventListener(EVENT_NAME, sync);
     window.addEventListener("storage", sync);
     window.addEventListener("markwise:auth:changed", sync);
     return () => {
+      unsubscribeFirebase();
       window.removeEventListener(EVENT_NAME, sync);
       window.removeEventListener("storage", sync);
       window.removeEventListener("markwise:auth:changed", sync);
