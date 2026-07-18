@@ -32,6 +32,8 @@ export type Classroom = {
   createdAt: number;
   updatedAt: number;
   role: ClassroomRole;
+  ownerUserId?: string;
+  memberUserId?: string;
 };
 
 export type ClassPost = {
@@ -163,16 +165,42 @@ function generateClassCode(existing: Classroom[]) {
   return code;
 }
 
+function currentUserId() {
+  return getCurrentUser()?.id ?? "guest";
+}
+
 function currentName() {
   return getCurrentUser()?.name ?? "You";
 }
 
+function canCurrentUserSeeClassroom(room: Classroom) {
+  const userId = currentUserId();
+  if (room.ownerUserId || room.memberUserId) {
+    return room.ownerUserId === userId || room.memberUserId === userId;
+  }
+  return false;
+}
+
+function scopeStateToCurrentUser(state: ClassroomState): ClassroomState {
+  const classrooms = state.classrooms.filter(canCurrentUserSeeClassroom);
+  const classIds = new Set(classrooms.map((room) => room.id));
+  const assignmentIds = new Set(
+    state.assignments.filter((assignment) => classIds.has(assignment.classId)).map((assignment) => assignment.id),
+  );
+  return {
+    classrooms,
+    posts: state.posts.filter((post) => classIds.has(post.classId)),
+    assignments: state.assignments.filter((assignment) => classIds.has(assignment.classId)),
+    submissions: state.submissions.filter((submission) => assignmentIds.has(submission.assignmentId)),
+  };
+}
+
 export function getClassrooms(): Classroom[] {
-  return readState().classrooms;
+  return scopeStateToCurrentUser(readState()).classrooms;
 }
 
 export function getClassById(classId: string): Classroom | undefined {
-  return readState().classrooms.find((room) => room.id === classId);
+  return scopeStateToCurrentUser(readState()).classrooms.find((room) => room.id === classId);
 }
 
 export function createClassroom(
@@ -188,6 +216,8 @@ export function createClassroom(
     classCode: input.classCode?.trim().toUpperCase() || generateClassCode(state.classrooms),
     createdAt: now,
     updatedAt: now,
+    ownerUserId: currentUserId(),
+    memberUserId: currentUserId(),
   };
   writeState({
     ...state,
@@ -239,15 +269,21 @@ export function deleteClassroom(classId: string) {
 export function joinClassroomByCode(code: string): Classroom | null {
   const state = readState();
   const target = state.classrooms.find(
-    (room) => room.classCode.toUpperCase() === code.trim().toUpperCase(),
+    (room) => room.classCode.toUpperCase() === code.trim().toUpperCase() && room.role === "teacher",
   );
   if (!target) return null;
-  if (target.role === "student") return target;
+  const userId = currentUserId();
+  const existing = state.classrooms.find(
+    (room) => room.classCode === target.classCode && room.memberUserId === userId,
+  );
+  if (existing) return existing;
   const joined: Classroom = {
     ...target,
     id: randomId("class"),
     role: "student",
     teacherName: target.teacherName,
+    ownerUserId: target.ownerUserId,
+    memberUserId: userId,
     updatedAt: Date.now(),
   };
   writeState({ ...state, classrooms: [joined, ...state.classrooms] });
@@ -383,10 +419,10 @@ export function findQuestionsForAssignment(filter: AssignmentQuestionFilter): Qu
 }
 
 export function useClassroomHub() {
-  const [state, setState] = useState<ClassroomState>(() => readState());
+  const [state, setState] = useState<ClassroomState>(() => scopeStateToCurrentUser(readState()));
 
   useEffect(() => {
-    const sync = () => setState(readState());
+    const sync = () => setState(scopeStateToCurrentUser(readState()));
     sync();
     window.addEventListener(EVENT_NAME, sync);
     window.addEventListener("storage", sync);
@@ -398,7 +434,7 @@ export function useClassroomHub() {
     };
   }, []);
 
-  const refresh = useCallback(() => setState(readState()), []);
+  const refresh = useCallback(() => setState(scopeStateToCurrentUser(readState())), []);
 
   return useMemo(
     () => ({
