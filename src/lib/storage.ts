@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
+import { doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 import { getCurrentUser } from "./auth";
+import { db } from "./firebase";
 
 export type Attempt = {
   id: string;
@@ -21,6 +23,8 @@ export type Attempt = {
 
 const KEY_PREFIX = "markwise:attempts:v2";
 const FLASHCARD_KEY_PREFIX = "markwise:flashcards:v1";
+const ATTEMPTS_FIRESTORE_COLLECTION = "markwiseAttemptStates";
+const ATTEMPTS_EVENT = "markwise:attempts:changed";
 
 function storageKey(userId: string) {
   return `${KEY_PREFIX}:${userId}`;
@@ -38,10 +42,70 @@ function read(userId?: string): Attempt[] {
   }
 }
 
-function write(userId: string, items: Attempt[]) {
+function writeLocalAttempts(userId: string, items: Attempt[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(storageKey(userId), JSON.stringify(items));
-  window.dispatchEvent(new Event("markwise:attempts:changed"));
+  window.dispatchEvent(new Event(ATTEMPTS_EVENT));
+}
+
+function write(userId: string, items: Attempt[]) {
+  writeLocalAttempts(userId, items);
+  void saveAttemptsToFirebase(userId, items);
+}
+
+function normaliseAttempts(value: unknown): Attempt[] {
+  return Array.isArray(value) ? (value as Attempt[]) : [];
+}
+
+async function saveAttemptsToFirebase(userId: string, items: Attempt[]) {
+  if (typeof window === "undefined") return;
+  try {
+    await setDoc(
+      doc(db, ATTEMPTS_FIRESTORE_COLLECTION, userId),
+      {
+        attempts: items.filter((attempt) => attempt.userId === userId),
+        userId,
+        updatedAt: Date.now(),
+      },
+      { merge: true },
+    );
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.warn("MarkWise attempt Firebase save failed. Using localStorage fallback.", error);
+    }
+  }
+}
+
+async function loadAttemptsFromFirebase(userId: string) {
+  if (typeof window === "undefined") return null;
+  try {
+    const snapshot = await getDoc(doc(db, ATTEMPTS_FIRESTORE_COLLECTION, userId));
+    if (!snapshot.exists()) return null;
+    return normaliseAttempts(snapshot.data().attempts).filter((attempt) => attempt.userId === userId);
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.warn("MarkWise attempt Firebase load failed. Using localStorage fallback.", error);
+    }
+    return null;
+  }
+}
+
+function subscribeToFirebaseAttempts(userId: string, onItems: (items: Attempt[]) => void) {
+  if (typeof window === "undefined") return () => {};
+  return onSnapshot(
+    doc(db, ATTEMPTS_FIRESTORE_COLLECTION, userId),
+    (snapshot) => {
+      if (!snapshot.exists()) return;
+      const attempts = normaliseAttempts(snapshot.data().attempts).filter((attempt) => attempt.userId === userId);
+      writeLocalAttempts(userId, attempts);
+      onItems(attempts);
+    },
+    (error) => {
+      if (import.meta.env.DEV) {
+        console.warn("MarkWise attempt Firebase subscription failed. Using localStorage fallback.", error);
+      }
+    },
+  );
 }
 
 export function recordAttempt(a: Omit<Attempt, "id" | "date" | "userId">) {
@@ -198,11 +262,26 @@ export function useAttempts() {
       setItems(user ? read(user.id) : []);
     };
     sync();
-    window.addEventListener("markwise:attempts:changed", sync);
+    let unsubscribeFirebase = () => {};
+    const user = getCurrentUser();
+    if (user) {
+      void loadAttemptsFromFirebase(user.id).then((remoteAttempts) => {
+        if (!remoteAttempts) {
+          const localAttempts = read(user.id);
+          if (localAttempts.length) void saveAttemptsToFirebase(user.id, localAttempts);
+          return;
+        }
+        writeLocalAttempts(user.id, remoteAttempts);
+        setItems(remoteAttempts);
+      });
+      unsubscribeFirebase = subscribeToFirebaseAttempts(user.id, setItems);
+    }
+    window.addEventListener(ATTEMPTS_EVENT, sync);
     window.addEventListener("markwise:auth:changed", sync);
     window.addEventListener("storage", sync);
     return () => {
-      window.removeEventListener("markwise:attempts:changed", sync);
+      unsubscribeFirebase();
+      window.removeEventListener(ATTEMPTS_EVENT, sync);
       window.removeEventListener("markwise:auth:changed", sync);
       window.removeEventListener("storage", sync);
     };
