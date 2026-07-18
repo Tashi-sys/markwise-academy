@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -23,7 +24,8 @@ import {
   getSubjectsForBoard,
 } from "../data/syllabusConfig";
 import { askStudyNotebook } from "../lib/api/study-notebook.functions";
-import { useAuth } from "../lib/auth";
+import { getCurrentUser, useAuth } from "../lib/auth";
+import { db } from "../lib/firebase";
 import { recordFlashcards } from "../lib/storage";
 
 export const Route = createFileRoute("/app/study-notebook")({
@@ -97,6 +99,7 @@ type NotebookGenerationContext = {
 };
 
 const STORAGE_KEY = "markwise:study-notebooks:v1";
+const NOTEBOOKS_FIRESTORE_COLLECTION = "markwiseNotebookStates";
 const UNTITLED_NOTEBOOK_TITLE = "Untitled notebook";
 const QUICK_ACTIONS = [
   "Summarise Sources",
@@ -148,6 +151,7 @@ function StudyNotebookPage() {
   const { user } = useAuth();
   const [notebooks, setNotebooks] = useState<Notebook[]>(() => readNotebooks());
   const [activeId, setActiveId] = useState(() => notebooks[0]?.id ?? "");
+  const [notebookSyncReady, setNotebookSyncReady] = useState(false);
   const [sourceText, setSourceText] = useState("");
   const [sourceTitle, setSourceTitle] = useState("");
   const [selectedSourceId, setSelectedSourceId] = useState("all");
@@ -209,8 +213,52 @@ function StudyNotebookPage() {
   };
 
   useEffect(() => {
-    saveNotebooks(notebooks);
-  }, [notebooks]);
+    if (!user) {
+      setNotebookSyncReady(false);
+      setNotebooks([]);
+      setActiveId("");
+      return;
+    }
+
+    setNotebookSyncReady(false);
+    const localNotebooks = readNotebooks(user.id);
+    setNotebooks(localNotebooks);
+    setActiveId((current) =>
+      localNotebooks.some((notebook) => notebook.id === current)
+        ? current
+        : (localNotebooks[0]?.id ?? ""),
+    );
+    void loadNotebooksFromFirebase(user.id).then((remoteNotebooks) => {
+      if (!remoteNotebooks) {
+        if (localNotebooks.length) void saveNotebooksToFirebase(user.id, localNotebooks);
+        setNotebookSyncReady(true);
+        return;
+      }
+      writeLocalNotebooks(user.id, remoteNotebooks);
+      setNotebooks(remoteNotebooks);
+      setActiveId((current) =>
+        remoteNotebooks.some((notebook) => notebook.id === current)
+          ? current
+          : (remoteNotebooks[0]?.id ?? ""),
+      );
+      setNotebookSyncReady(true);
+    });
+
+    return subscribeToFirebaseNotebooks(user.id, (remoteNotebooks) => {
+      writeLocalNotebooks(user.id, remoteNotebooks);
+      setNotebooks(remoteNotebooks);
+      setActiveId((current) =>
+        remoteNotebooks.some((notebook) => notebook.id === current)
+          ? current
+          : (remoteNotebooks[0]?.id ?? ""),
+      );
+    });
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user || !notebookSyncReady) return;
+    saveNotebooks(notebooks, user.id);
+  }, [notebookSyncReady, notebooks, user]);
 
   useEffect(() => {
     if (activeNotebook) touchNotebook(activeNotebook.id);
@@ -2480,23 +2528,92 @@ function firstSentence(text: string) {
   );
 }
 
-function readNotebooks(): Notebook[] {
-  if (typeof window === "undefined") return [];
+function notebookStorageKey(userId: string) {
+  return `${STORAGE_KEY}:${userId}`;
+}
+
+function normaliseNotebooks(value: unknown): Notebook[] {
+  if (!Array.isArray(value)) return [];
+  return (value as Notebook[]).map((notebook) =>
+    isOldEmptyAutoTitle(notebook) ? { ...notebook, title: UNTITLED_NOTEBOOK_TITLE } : notebook,
+  );
+}
+
+function readNotebooks(userId = getCurrentUser()?.id): Notebook[] {
+  if (typeof window === "undefined" || !userId) return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw
-      ? (JSON.parse(raw) as Notebook[]).map((notebook) =>
-          isOldEmptyAutoTitle(notebook)
-            ? { ...notebook, title: UNTITLED_NOTEBOOK_TITLE }
-            : notebook,
-        )
-      : [];
+    const scopedRaw = window.localStorage.getItem(notebookStorageKey(userId));
+    if (scopedRaw) return normaliseNotebooks(JSON.parse(scopedRaw));
+
+    const legacyRaw = window.localStorage.getItem(STORAGE_KEY);
+    if (!legacyRaw) return [];
+    const legacyNotebooks = normaliseNotebooks(JSON.parse(legacyRaw));
+    if (legacyNotebooks.length) {
+      writeLocalNotebooks(userId, legacyNotebooks);
+      window.localStorage.removeItem(STORAGE_KEY);
+    }
+    return legacyNotebooks;
   } catch {
     return [];
   }
 }
 
-function saveNotebooks(notebooks: Notebook[]) {
+function writeLocalNotebooks(userId: string, notebooks: Notebook[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(notebooks));
+  window.localStorage.setItem(notebookStorageKey(userId), JSON.stringify(notebooks));
+}
+
+function saveNotebooks(notebooks: Notebook[], userId = getCurrentUser()?.id) {
+  if (!userId) return;
+  writeLocalNotebooks(userId, notebooks);
+  void saveNotebooksToFirebase(userId, notebooks);
+}
+
+async function saveNotebooksToFirebase(userId: string, notebooks: Notebook[]) {
+  if (typeof window === "undefined") return;
+  try {
+    await setDoc(
+      doc(db, NOTEBOOKS_FIRESTORE_COLLECTION, userId),
+      {
+        notebooks,
+        userId,
+        updatedAt: Date.now(),
+      },
+      { merge: true },
+    );
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.warn("MarkWise notebook Firebase save failed. Using localStorage fallback.", error);
+    }
+  }
+}
+
+async function loadNotebooksFromFirebase(userId: string) {
+  if (typeof window === "undefined") return null;
+  try {
+    const snapshot = await getDoc(doc(db, NOTEBOOKS_FIRESTORE_COLLECTION, userId));
+    if (!snapshot.exists()) return null;
+    return normaliseNotebooks(snapshot.data().notebooks);
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.warn("MarkWise notebook Firebase load failed. Using localStorage fallback.", error);
+    }
+    return null;
+  }
+}
+
+function subscribeToFirebaseNotebooks(userId: string, onNotebooks: (notebooks: Notebook[]) => void) {
+  if (typeof window === "undefined") return () => {};
+  return onSnapshot(
+    doc(db, NOTEBOOKS_FIRESTORE_COLLECTION, userId),
+    (snapshot) => {
+      if (!snapshot.exists()) return;
+      onNotebooks(normaliseNotebooks(snapshot.data().notebooks));
+    },
+    (error) => {
+      if (import.meta.env.DEV) {
+        console.warn("MarkWise notebook Firebase subscription failed. Using localStorage fallback.", error);
+      }
+    },
+  );
 }
