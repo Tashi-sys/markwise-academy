@@ -46,22 +46,45 @@ export const Route = createFileRoute("/app")({
   component: AppLayout,
 });
 
-const NAV = [
-  { to: "/app/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: true },
-  { to: "/app/subjects", label: "Subjects", icon: BookMarked, exact: false },
-  { to: "/app/practice", label: "Practise", icon: ListChecks, exact: false },
-  { to: "/app/progress", label: "Progress", icon: LineChart, exact: false },
-  { to: "/app/review", label: "Review", icon: History, exact: false },
-  { to: "/app/ai-tutor", label: "AI Tutor", icon: Bot, exact: true },
-  { to: "/app/study-notebook", label: "Study Notebook", icon: NotebookTabs, exact: true },
-  { to: "/app/classroom", label: "Classroom", icon: GraduationCap, exact: false },
-  { to: "/app/keywords", label: "Keywords", icon: KeyRound, exact: true },
-  { to: "/app/flashcards", label: "Flashcards", icon: Layers, exact: true },
-  { to: "/app/model-answers", label: "Models", icon: BookOpenCheck, exact: true },
-  { to: "/app/common-mistakes", label: "Mistakes", icon: AlertTriangle, exact: true },
-  { to: "/app/mini-paper", label: "Mini Paper", icon: FileText, exact: true },
-  { to: "/app/generate", label: "Generate", icon: Sparkles, exact: true },
-  { to: "/app/profile", label: "Profile", icon: User, exact: true },
+const NAV_SECTIONS = [
+  {
+    title: "Overview",
+    items: [
+      { to: "/app/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: true },
+      { to: "/app/progress", label: "Progress", icon: LineChart, exact: false },
+    ],
+  },
+  {
+    title: "Learning",
+    items: [
+      { to: "/app/subjects", label: "Subjects", icon: BookMarked, exact: false },
+      { to: "/app/ai-tutor", label: "AI Tutor", icon: Bot, exact: true },
+      { to: "/app/study-notebook", label: "Revision Notes", icon: NotebookTabs, exact: true },
+      { to: "/app/keywords", label: "Keywords", icon: KeyRound, exact: true },
+      { to: "/app/model-answers", label: "Model Answers", icon: BookOpenCheck, exact: true },
+    ],
+  },
+  {
+    title: "Active Recall",
+    items: [
+      { to: "/app/practice", label: "Practise", icon: ListChecks, exact: false },
+      { to: "/app/flashcards", label: "Flashcards", icon: Layers, exact: true },
+      { to: "/app/mini-paper", label: "Mini Paper", icon: FileText, exact: true },
+      { to: "/app/review", label: "Review", icon: History, exact: false },
+      { to: "/app/common-mistakes", label: "Mistakes", icon: AlertTriangle, exact: true },
+    ],
+  },
+  {
+    title: "Tools",
+    items: [
+      { to: "/app/generate", label: "Generate", icon: Sparkles, exact: true },
+      { to: "/app/classroom", label: "Classroom", icon: GraduationCap, exact: false },
+    ],
+  },
+  {
+    title: "Account",
+    items: [{ to: "/app/profile", label: "Profile", icon: User, exact: true }],
+  },
 ];
 
 const MOBILE_NAV = [
@@ -133,28 +156,37 @@ function AppLayout() {
             </Link>
           </div>
 
-          <nav className="mt-6 flex flex-col gap-1 overflow-y-auto pr-1">
-            {NAV.map((item) => {
-              const active = item.exact ? pathname === item.to : pathname.startsWith(item.to);
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className={`group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                    active
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  }`}
-                >
-                  {active && (
-                    <span className="absolute inset-y-1 left-0 w-1 rounded-full bg-primary shadow-glow" />
-                  )}
-                  <Icon className="h-4 w-4 transition group-hover:-translate-y-0.5 group-hover:scale-110" />
-                  {item.label}
-                </Link>
-              );
-            })}
+          <nav className="mt-6 flex flex-col gap-5 overflow-y-auto pr-1">
+            {NAV_SECTIONS.map((section) => (
+              <div key={section.title} className="space-y-1.5">
+                <div className="px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
+                  {section.title}
+                </div>
+                <div className="space-y-1">
+                  {section.items.map((item) => {
+                    const active = item.exact ? pathname === item.to : pathname.startsWith(item.to);
+                    const Icon = item.icon;
+                    return (
+                      <Link
+                        key={item.to}
+                        to={item.to}
+                        className={`group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                          active
+                            ? "bg-primary/10 text-primary shadow-sm"
+                            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                        }`}
+                      >
+                        {active && (
+                          <span className="absolute inset-y-1 left-0 w-1 rounded-full bg-primary shadow-glow" />
+                        )}
+                        <Icon className="h-4 w-4 transition group-hover:-translate-y-0.5 group-hover:scale-110" />
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </nav>
 
           <button
