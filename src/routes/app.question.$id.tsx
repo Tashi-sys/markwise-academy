@@ -22,6 +22,7 @@ import {
 } from "../lib/questions";
 import { markAnswer, upgradeAnswer, type MarkResult } from "../lib/marking";
 import { recordAttempt, recordFlashcards } from "../lib/storage";
+import { canUseQuestion } from "../lib/userSyllabus";
 import { useAuth } from "../lib/auth";
 import { generateAnswerUpgrade } from "../lib/api/upgrade-answer.functions";
 import { markWithAIExaminer } from "../lib/api/exam-training.functions";
@@ -86,12 +87,12 @@ function QuestionPage() {
 
   if (!user) return null;
 
-  if (question.examBoard !== user.examBoard || question.qualification !== user.qualification) {
+  if (!canUseQuestion(user, question)) {
     throw notFound();
   }
 
   const meta = getTopicMeta(question.subject, question.topic);
-  const subjectLabel = getSubjectName(user.examBoard, question.subject);
+  const subjectLabel = getSubjectName(question.examBoard, question.subject);
 
   const submit = () => {
     if (answer.trim().length === 0) return;
@@ -130,8 +131,8 @@ function QuestionPage() {
 
   const nextQuestion = () => {
     const pool = filterQuestions({
-      examBoard: user.examBoard,
-      qualification: user.qualification,
+      examBoard: question.examBoard,
+      qualification: question.qualification,
       subject: question.subject,
       topic: question.topic,
     }).filter((q) => q.id !== question.id);
@@ -140,7 +141,11 @@ function QuestionPage() {
       navigate({ to: "/app/question/$id", params: { id: pick.id }, search: { mode } });
       reset();
     } else {
-      navigate({ to: "/app/topics/$subject", params: { subject: question.subject } });
+      navigate({
+        to: "/app/topics/$subject",
+        params: { subject: question.subject },
+        search: { examBoard: question.examBoard, qualification: question.qualification },
+      });
     }
   };
 

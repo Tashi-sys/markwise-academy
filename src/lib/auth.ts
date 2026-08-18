@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { doc, setDoc } from "firebase/firestore";
 import type { ExamBoardId, Qualification } from "../data/syllabusConfig";
+import { db } from "./firebase";
 
 export type SubjectSyllabusSelection = {
   subject: string;
@@ -26,6 +28,104 @@ type StoredUser = UserProfile & { password: string };
 const SESSION_KEY = "markwise:session:v1";
 const USERS_KEY = "markwise:users:v1";
 const AUTH_EVENT = "markwise:auth:changed";
+const USER_PROFILES_COLLECTION = "users";
+const ALLOWED_EMAIL_PROVIDERS = new Set([
+  "gmail.com",
+  "icloud.com",
+  "me.com",
+  "mac.com",
+  "outlook.com",
+  "hotmail.com",
+  "live.com",
+  "yahoo.com",
+  "proton.me",
+  "protonmail.com",
+  "aol.com",
+]);
+
+const ALLOWED_EMAIL_TLDS = new Set([
+  "com",
+  "edu",
+  "org",
+  "net",
+  "ac.uk",
+  "co.uk",
+  "school",
+  "academy",
+  "io",
+]);
+
+export function validateEmailAddress(value: string) {
+  const email = value.trim().toLowerCase();
+  const basic = new RegExp("^[a-z0-9.!#$%&'*+/=?^_{|}~-]+@[a-z0-9-]+(?:\\.[a-z0-9-]+)+$").test(email);
+  if (!basic) {
+    return { ok: false, error: "Enter a real email address, like name@gmail.com or name@school.edu." };
+  }
+
+  const [, domain = ""] = email.split("@");
+  const domainParts = domain.split(".");
+  const tld = domainParts.slice(-1)[0];
+  const twoPartTld = domainParts.slice(-2).join(".");
+  const hasAllowedProvider = ALLOWED_EMAIL_PROVIDERS.has(domain);
+  const hasAllowedTld = ALLOWED_EMAIL_TLDS.has(tld) || ALLOWED_EMAIL_TLDS.has(twoPartTld);
+
+  if (!hasAllowedProvider && !hasAllowedTld) {
+    return {
+      ok: false,
+      error: "Use a recognised email provider or school email ending, like Gmail, iCloud, Outlook, .com, or .edu.",
+    };
+  }
+
+  return { ok: true, email };
+}
+
+
+export function userProfileDocumentId(user: Pick<UserProfile, "id" | "name">) {
+  const slug = user.name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return slug || user.id;
+}
+
+function publicUserProfile(user: UserProfile) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    qualification: user.qualification,
+    examBoard: user.examBoard,
+    selectedSubjects: user.selectedSubjects,
+    subjectSyllabuses: user.subjectSyllabuses,
+    targetGrade: user.targetGrade,
+    weakestSubject: user.weakestSubject,
+    preferredPracticeMode: user.preferredPracticeMode,
+    createdAt: user.createdAt,
+  };
+}
+
+async function syncUserProfileToFirebase(user: UserProfile) {
+  if (typeof window === "undefined") return;
+  try {
+    const profile = publicUserProfile(user);
+    await setDoc(
+      doc(db, USER_PROFILES_COLLECTION, userProfileDocumentId(user)),
+      {
+        ...profile,
+        localUserId: user.id,
+        updatedAt: Date.now(),
+      },
+      { merge: true },
+    );
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.warn("MarkWise user profile Firebase save failed. Using localStorage fallback.", error);
+    }
+  }
+}
+
 
 function readUsers(): StoredUser[] {
   if (typeof window === "undefined") return [];
@@ -98,7 +198,8 @@ export type AuthResult = { ok: true; user: UserProfile } | { ok: false; error: s
 export function signup(input: SignupInput): AuthResult {
   const email = input.email.trim().toLowerCase();
   if (!input.name.trim()) return { ok: false, error: "Please enter your full name." };
-  if (!email.includes("@")) return { ok: false, error: "Please enter a valid email." };
+  const emailStatus = validateEmailAddress(email);
+  if (!emailStatus.ok) return { ok: false, error: emailStatus.error };
   if (input.password.length < 6)
     return { ok: false, error: "Password must be at least 6 characters." };
   if (input.selectedSubjects.length === 0)
@@ -136,6 +237,7 @@ export function signup(input: SignupInput): AuthResult {
   writeSessionId(profile.id);
 
   const { password: _, ...user } = profile;
+  void syncUserProfileToFirebase(user);
   return { ok: true, user };
 }
 
@@ -144,7 +246,8 @@ export function login(email: string, password: string): AuthResult {
   const user = readUsers().find((u) => u.email === normalised && u.password === password);
   if (!user) return { ok: false, error: "Invalid email or password." };
   writeSessionId(user.id);
-  const { password: _, ...profile } = user;
+  const { password: _, ...profile } = normaliseUser(user);
+  void syncUserProfileToFirebase(profile);
   return { ok: true, user: profile };
 }
 
@@ -170,7 +273,8 @@ export function updateUserProfile(
   users[idx] = { ...users[idx], ...updates };
   writeUsers(users);
 
-  const { password: _, ...user } = users[idx];
+  const { password: _, ...user } = normaliseUser(users[idx]);
+  void syncUserProfileToFirebase(user);
   return { ok: true, user };
 }
 
@@ -179,9 +283,15 @@ export function useAuth() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setUser(getCurrentUser());
+    const current = getCurrentUser();
+    setUser(current);
+    if (current) void syncUserProfileToFirebase(current);
     setReady(true);
-    const sync = () => setUser(getCurrentUser());
+    const sync = () => {
+      const next = getCurrentUser();
+      setUser(next);
+      if (next) void syncUserProfileToFirebase(next);
+    };
     window.addEventListener(AUTH_EVENT, sync);
     window.addEventListener("storage", sync);
     return () => {

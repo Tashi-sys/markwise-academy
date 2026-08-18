@@ -4,6 +4,7 @@ import type { ExamBoardId, Qualification } from "../data/syllabusConfig";
 import { filterQuestions, type Question } from "../data/questionBank";
 import { getCurrentUser } from "./auth";
 import { db } from "./firebase";
+import { requestUserDataSync } from "./userDataSync";
 
 export type ClassroomRole = "teacher" | "student";
 export type ClassroomAssignmentType =
@@ -151,6 +152,7 @@ function writeLocalState(state: ClassroomState) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   window.dispatchEvent(new Event(EVENT_NAME));
+  requestUserDataSync();
 }
 
 function writeState(state: ClassroomState) {

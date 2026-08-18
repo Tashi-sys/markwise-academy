@@ -3,13 +3,20 @@ import { useState } from "react";
 import { AuthError, AuthField, AuthLayout, authInputClass } from "../components/auth/AuthLayout";
 import { getCurrentUser, login } from "../lib/auth";
 
+function safeRedirectTarget(value: unknown) {
+  return typeof value === "string" && value.startsWith("/app") ? value : "/app/dashboard";
+}
+
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [{ title: "Log in — MarkWise" }],
   }),
-  beforeLoad: () => {
+  validateSearch: (search: Record<string, unknown>) => ({
+    redirect: safeRedirectTarget(search.redirect),
+  }),
+  beforeLoad: ({ search }) => {
     if (typeof window !== "undefined" && getCurrentUser()) {
-      throw redirect({ to: "/app/dashboard" });
+      throw redirect({ to: safeRedirectTarget(search.redirect) });
     }
   },
   component: LoginPage,
@@ -17,6 +24,7 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
+  const { redirect: redirectTo } = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -32,7 +40,7 @@ function LoginPage() {
       setError(result.error);
       return;
     }
-    navigate({ to: "/app/dashboard" });
+    navigate({ to: redirectTo });
   };
 
   return (
@@ -42,7 +50,7 @@ function LoginPage() {
       footer={
         <>
           Don&apos;t have an account?{" "}
-          <Link to="/signup" className="font-medium text-primary hover:underline">
+          <Link to="/signup" search={{ redirect: redirectTo }} className="font-medium text-primary hover:underline">
             Sign up
           </Link>
         </>

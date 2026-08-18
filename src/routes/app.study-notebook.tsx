@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen,
   Brain,
@@ -27,6 +27,7 @@ import { askStudyNotebook } from "../lib/api/study-notebook.functions";
 import { getCurrentUser, useAuth } from "../lib/auth";
 import { db } from "../lib/firebase";
 import { recordFlashcards } from "../lib/storage";
+import { requestUserDataSync } from "../lib/userDataSync";
 
 export const Route = createFileRoute("/app/study-notebook")({
   component: StudyNotebookPage,
@@ -153,6 +154,7 @@ function StudyNotebookPage() {
   const [activeId, setActiveId] = useState(() => notebooks[0]?.id ?? "");
   const [notebookSyncReady, setNotebookSyncReady] = useState(false);
   const [sourceText, setSourceText] = useState("");
+  const sourceTextRef = useRef<HTMLTextAreaElement | null>(null);
   const [sourceTitle, setSourceTitle] = useState("");
   const [selectedSourceId, setSelectedSourceId] = useState("all");
   const [selectedSourceOnly, setSelectedSourceOnly] = useState(false);
@@ -298,8 +300,14 @@ function StudyNotebookPage() {
     toast.success("Notebook deleted");
   };
 
-  const addTextSource = (kind: "Paste text" | "Manual note" = "Paste text") => {
-    if (!activeNotebook || !sourceText.trim()) return;
+  const addTextSource = () => {
+    if (!activeNotebook) return;
+    if (!sourceText.trim()) {
+      sourceTextRef.current?.focus();
+      toast.warning("Type or paste a note first, then add it.");
+      return;
+    }
+    const kind = "Note / source";
     const title =
       sourceTitle.trim() || inferSourceTitle(sourceText, kind, activeNotebook.sources.length + 1);
     const source = makeSource(title, kind, sourceText);
@@ -632,6 +640,7 @@ function StudyNotebookPage() {
                   className="rounded-xl border border-input bg-background px-3 py-2 text-sm"
                 />
                 <textarea
+                  ref={sourceTextRef}
                   value={sourceText}
                   onChange={(event) => setSourceText(event.target.value)}
                   placeholder="Paste notes, markscheme text, syllabus points, or revision material..."
@@ -641,17 +650,10 @@ function StudyNotebookPage() {
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() => addTextSource("Paste text")}
+                    onClick={addTextSource}
                     className="interactive-button rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-glow"
                   >
-                    Paste Notes
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => addTextSource("Manual note")}
-                    className="interactive-button rounded-full border border-border px-4 py-2 text-sm hover:bg-secondary"
-                  >
-                    Create Manual Note
+                    Add Note / Source
                   </button>
                   <label className="interactive-button cursor-pointer rounded-full border border-border px-4 py-2 text-sm hover:bg-secondary">
                     Upload File
@@ -2561,6 +2563,8 @@ function readNotebooks(userId = getCurrentUser()?.id): Notebook[] {
 function writeLocalNotebooks(userId: string, notebooks: Notebook[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(notebookStorageKey(userId), JSON.stringify(notebooks));
+  window.dispatchEvent(new Event("markwise:study-notebooks:changed"));
+  requestUserDataSync();
 }
 
 function saveNotebooks(notebooks: Notebook[], userId = getCurrentUser()?.id) {

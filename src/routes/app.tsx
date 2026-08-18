@@ -28,8 +28,14 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getCurrentUser, logout, useAuth } from "../lib/auth";
-import { getExamBoard } from "../data/syllabusConfig";
+import { getSyllabusSummary } from "../lib/userSyllabus";
 import { applyTheme, persistTheme, readStoredTheme, type MarkwiseThemeId } from "../lib/theme";
+import { useFirebaseUserDataSync } from "../lib/userDataSync";
+
+function appReturnPath() {
+  if (typeof window === "undefined") return "/app/dashboard";
+  return window.location.pathname + window.location.search + window.location.hash;
+}
 
 export const Route = createFileRoute("/app")({
   head: () => ({
@@ -40,7 +46,7 @@ export const Route = createFileRoute("/app")({
   }),
   beforeLoad: () => {
     if (typeof window !== "undefined" && !getCurrentUser()) {
-      throw redirect({ to: "/login" });
+      throw redirect({ to: "/login", search: { redirect: appReturnPath() } });
     }
   },
   component: AppLayout,
@@ -102,13 +108,20 @@ function AppLayout() {
   const isNavigating = useRouterState({ select: (s) => s.status === "pending" });
   const { user, ready } = useAuth();
   const navigate = useNavigate();
+  useFirebaseUserDataSync(user);
 
   useEffect(() => {
     applyTheme(themeId);
     persistTheme(themeId);
   }, [themeId]);
 
-  if (!ready) {
+  useEffect(() => {
+    if (ready && !user) {
+      navigate({ to: "/login", search: { redirect: appReturnPath() } });
+    }
+  }, [ready, user, navigate]);
+
+  if (!ready || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
         Loading…
@@ -116,9 +129,7 @@ function AppLayout() {
     );
   }
 
-  if (!user) return null;
-
-  const board = getExamBoard(user.examBoard);
+  const syllabusSummary = getSyllabusSummary(user);
 
   const handleLogout = () => {
     logout();
@@ -148,7 +159,7 @@ function AppLayout() {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-semibold">{user.name}</div>
-                <div className="truncate text-[10px] text-muted-foreground">{board?.name}</div>
+                <div className="truncate text-[10px] text-muted-foreground">{syllabusSummary}</div>
               </div>
             </div>
             <Link to="/app/profile" className="mt-2 block text-xs text-primary hover:underline">

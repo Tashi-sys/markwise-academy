@@ -2,18 +2,25 @@ import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-ro
 import { useMemo, useState } from "react";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { AuthError, AuthField, AuthLayout, authInputClass } from "../components/auth/AuthLayout";
-import { getCurrentUser, signup } from "../lib/auth";
+import { getCurrentUser, signup, validateEmailAddress } from "../lib/auth";
 import type { ExamBoardId, Qualification } from "../data/syllabusConfig";
 import { EXAM_BOARDS, getExamBoard } from "../data/syllabusConfig";
 import { subjectHasQuestions } from "../data/questionBank";
+
+function safeRedirectTarget(value: unknown) {
+  return typeof value === "string" && value.startsWith("/app") ? value : "/app/dashboard";
+}
 
 export const Route = createFileRoute("/signup")({
   head: () => ({
     meta: [{ title: "Sign up - MarkWise" }],
   }),
-  beforeLoad: () => {
+  validateSearch: (search: Record<string, unknown>) => ({
+    redirect: safeRedirectTarget(search.redirect),
+  }),
+  beforeLoad: ({ search }) => {
     if (typeof window !== "undefined" && getCurrentUser()) {
-      throw redirect({ to: "/app/dashboard" });
+      throw redirect({ to: safeRedirectTarget(search.redirect) });
     }
   },
   component: SignupPage,
@@ -43,6 +50,7 @@ const SIGNUP_SUBJECT_OPTIONS: SignupSubjectOption[] = EXAM_BOARDS.flatMap((board
 
 function SignupPage() {
   const navigate = useNavigate();
+  const { redirect: redirectTo } = Route.useSearch();
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -50,6 +58,7 @@ function SignupPage() {
   const [qualification, setQualification] = useState<Qualification>("IGCSE");
   const [examBoard, setExamBoard] = useState<ExamBoardId>("cambridge-igcse");
   const [selectedSubjectKeys, setSelectedSubjectKeys] = useState<string[]>([]);
+  const [subjectQualificationFilter, setSubjectQualificationFilter] = useState<"all" | Qualification>("all");
   const [targetGrade, setTargetGrade] = useState("8/9");
   const [weakestSubject, setWeakestSubject] = useState("biology");
   const [preferredPracticeMode, setPreferredPracticeMode] = useState<"practice" | "exam" | "mixed">(
@@ -68,6 +77,13 @@ function SignupPage() {
   const selectedBoardNames = useMemo(
     () => [...new Set(selectedOptions.map((option) => getExamBoard(option.examBoard)?.name ?? option.boardName))],
     [selectedOptions],
+  );
+  const visibleSubjectOptions = useMemo(
+    () =>
+      subjectQualificationFilter === "all"
+        ? SIGNUP_SUBJECT_OPTIONS
+        : SIGNUP_SUBJECT_OPTIONS.filter((option) => option.qualification === subjectQualificationFilter),
+    [subjectQualificationFilter],
   );
 
   const toggleSubject = (option: SignupSubjectOption) => {
@@ -90,7 +106,8 @@ function SignupPage() {
     setError("");
     if (step === 0) {
       if (!name.trim()) return setError("Please enter your full name.");
-      if (!email.includes("@")) return setError("Please enter a valid email.");
+      const emailStatus = validateEmailAddress(email);
+      if (!emailStatus.ok) return setError(emailStatus.error);
       if (password.length < 6) return setError("Password must be at least 6 characters.");
     }
     setStep((s) => Math.min(s + 1, STEPS.length - 1));
@@ -127,7 +144,7 @@ function SignupPage() {
       setError(result.error);
       return;
     }
-    navigate({ to: "/app/dashboard" });
+    navigate({ to: redirectTo });
   };
 
   return (
@@ -137,7 +154,7 @@ function SignupPage() {
       footer={
         <>
           Already have an account?{" "}
-          <Link to="/login" className="font-medium text-primary hover:underline">
+          <Link to="/login" search={{ redirect: redirectTo }} className="font-medium text-primary hover:underline">
             Log in
           </Link>
         </>
@@ -186,7 +203,8 @@ function SignupPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className={authInputClass}
-                placeholder="you@school.com"
+                placeholder="you@gmail.com"
+                pattern="^[^\s@]+@[^\s@]+\.[^\s@]+$"
               />
             </AuthField>
             <AuthField label="Password" hint="At least 6 characters">
@@ -247,8 +265,24 @@ function SignupPage() {
               label="Subjects studied"
               hint="You can select subjects from different syllabuses. Each one keeps the syllabus shown in brackets."
             >
+              <div className="mb-3 flex flex-wrap gap-2">
+                {(["all", "IGCSE", "GCSE"] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setSubjectQualificationFilter(filter)}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                      subjectQualificationFilter === filter
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-background text-muted-foreground hover:bg-secondary"
+                    }`}
+                  >
+                    {filter === "all" ? "All subjects" : filter}
+                  </button>
+                ))}
+              </div>
               <div className="max-h-72 space-y-1 overflow-y-auto rounded-lg border border-border bg-background p-2">
-                {SIGNUP_SUBJECT_OPTIONS.map((subject) => {
+                {visibleSubjectOptions.map((subject) => {
                   const checked = selectedSubjectKeys.includes(subject.key);
                   const hasQuestions = subjectHasQuestions(
                     subject.examBoard,
@@ -271,7 +305,7 @@ function SignupPage() {
                           className="rounded border-border"
                         />
                         <span className="truncate">
-                          {subject.name} ({subject.boardName})
+                          {subject.name} ({subject.qualification} · {subject.boardName})
                         </span>
                       </span>
                       <span className="shrink-0 text-[10px] text-muted-foreground">

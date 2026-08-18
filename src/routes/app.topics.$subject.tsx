@@ -1,5 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { ArrowRight, BookOpen, Layers, Settings } from "lucide-react";
+import { z } from "zod";
 import { getTopicsForSubjectAndSyllabus, getTopicMeta } from "../data/topicsConfig";
 import { filterQuestions } from "../data/questionBank";
 import {
@@ -10,8 +11,15 @@ import {
 } from "../data/syllabusConfig";
 import { useAttempts, topicStats, statusFromAcc } from "../lib/storage";
 import { useAuth } from "../lib/auth";
+import { findUserSubjectSyllabus } from "../lib/userSyllabus";
+
+const topicSearch = z.object({
+  examBoard: z.string().optional(),
+  qualification: z.string().optional(),
+});
 
 export const Route = createFileRoute("/app/topics/$subject")({
+  validateSearch: (s) => topicSearch.parse(s),
   loader: ({ params }) => ({ subject: params.subject }),
   component: TopicsPage,
   notFoundComponent: () => (
@@ -29,35 +37,37 @@ export const Route = createFileRoute("/app/topics/$subject")({
 
 function TopicsPage() {
   const { subject } = Route.useParams();
+  const search = Route.useSearch();
   const { user } = useAuth();
   const { attempts } = useAttempts();
 
   if (!user) return null;
 
-  const subjectName = getSubjectName(user.examBoard, subject);
-  const examBoard = getExamBoard(user.examBoard);
-  const syllabusCode = getSyllabusCode(user.examBoard, subject);
-  const qualificationLabel = getQualificationLabel(user.qualification);
-  const boardSubjects = user.selectedSubjects;
+  const selection = findUserSubjectSyllabus(user, subject, search.examBoard, search.qualification);
+  if (!selection) throw notFound();
 
-  if (!boardSubjects.includes(subject)) {
-    throw notFound();
-  }
+  const activeExamBoard = selection.examBoard;
+  const activeQualification = selection.qualification;
+  const subjectName = getSubjectName(activeExamBoard, subject);
+  const examBoard = getExamBoard(activeExamBoard);
+  const syllabusCode = getSyllabusCode(activeExamBoard, subject);
+  const qualificationLabel = getQualificationLabel(activeQualification);
 
   const topicsMeta = getTopicsForSubjectAndSyllabus({
     subjectId: subject,
-    examBoard: user.examBoard,
-    qualification: user.qualification,
+    examBoard: activeExamBoard,
+    qualification: activeQualification,
     syllabusCode,
   });
   const syllabusQuestions = filterQuestions({
-    qualification: user.qualification,
-    examBoard: user.examBoard,
+    qualification: activeQualification,
+    examBoard: activeExamBoard,
     subject,
     syllabusCode,
   });
   const userAttempts = attempts.filter(
-    (a) => a.examBoard === user.examBoard && a.subject === subject,
+    (a) =>
+      a.examBoard === activeExamBoard && a.qualification === activeQualification && a.subject === subject,
   );
 
   const questionTopicIds = [...new Set(syllabusQuestions.map((question) => question.topic))];
@@ -84,10 +94,10 @@ function TopicsPage() {
               Active syllabus
             </div>
             <h1 className="mt-2 text-3xl font-bold tracking-tight">
-              {subjectName} · {examBoard?.name ?? user.examBoard} · {syllabusCode ?? "No code"}
+              {subjectName} · {examBoard?.name ?? activeExamBoard} · {syllabusCode ?? "No code"}
             </h1>
             <p className="mt-1 text-muted-foreground">
-              {subjectName} • {examBoard?.name ?? user.examBoard} • {qualificationLabel}
+              {subjectName} • {examBoard?.name ?? activeExamBoard} • {qualificationLabel}
               {syllabusCode ? ` • ${syllabusCode}` : ""}
             </p>
           </div>
@@ -172,8 +182,7 @@ function TopicsPage() {
                 </div>
                 {hasQ && (
                   <div className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary">
-                    Practise{" "}
-                    <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                    Practise <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
                   </div>
                 )}
                 {!hasQ && (
@@ -184,7 +193,12 @@ function TopicsPage() {
               </div>
             );
             return hasQ ? (
-              <Link key={id} to="/app/practice/$subject/$topic" params={{ subject, topic: id }}>
+              <Link
+                key={id}
+                to="/app/practice/$subject/$topic"
+                params={{ subject, topic: id }}
+                search={{ examBoard: activeExamBoard, qualification: activeQualification }}
+              >
                 {inner}
               </Link>
             ) : (

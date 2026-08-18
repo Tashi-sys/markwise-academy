@@ -57,6 +57,7 @@ export const askAITutor = createServerFn({ method: "POST" })
         .enum([
           "greeting",
           "general",
+          "choose-for-me",
           "subject-specific",
           "marking",
           "model-answer",

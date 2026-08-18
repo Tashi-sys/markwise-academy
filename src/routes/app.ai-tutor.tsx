@@ -6,6 +6,7 @@ import { askAITutor, getAISettingsStatus } from "../lib/api/ai-tutor.functions";
 import { getExamBoard, getSubjectName, getSubjectsForBoard } from "../data/syllabusConfig";
 import { getMiniPaperSyllabus } from "../data/miniPaperConfig";
 import { useAuth } from "../lib/auth";
+import { requestUserDataSync } from "../lib/userDataSync";
 import { useAttempts } from "../lib/storage";
 
 export const Route = createFileRoute("/app/ai-tutor")({
@@ -57,10 +58,13 @@ function AITutorPage() {
   const [selectedTopic, setSelectedTopic] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const [streamingMessageKey, setStreamingMessageKey] = useState<string | null>(null);
   const [settings, setSettings] = useState<Awaited<ReturnType<typeof getAISettingsStatus>> | null>(
     null,
   );
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const typingRef = useRef(false);
 
   const activeChat = chats.find((chat) => chat.id === activeId) ?? chats[0];
   const selectedSubjectName =
@@ -78,7 +82,7 @@ function AITutorPage() {
   }, [attempts]);
 
   useEffect(() => {
-    saveChats(chats);
+    if (!typingRef.current) saveChats(chats);
   }, [chats]);
 
   useEffect(() => {
@@ -92,7 +96,7 @@ function AITutorPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [activeChat?.messages, loading]);
+  }, [activeChat?.messages, loading, isTyping]);
 
   if (!user) return null;
 
@@ -106,7 +110,7 @@ function AITutorPage() {
 
   const sendMessage = async () => {
     const text = message.trim();
-    if (!text || loading) return;
+    if (!text || loading || isTyping) return;
     const chat = ensureChat();
     const userMessage: TutorMessage = { role: "user", content: text };
     const nextMessages = [...chat.messages, userMessage];
@@ -120,13 +124,12 @@ function AITutorPage() {
       text,
       selectedSubject: subjectForContext,
       selectedTopic: selectedTopic.trim() || inferTopicFromMessage(text),
+      profileSubjects: user.selectedSubjects.map((subject) => getSubjectName(user.examBoard, subject)),
+      weakestSubject: user.weakestSubject,
+      weakTopics,
     });
     if (localReply) {
-      updateChat(chat.id, {
-        messages: [...nextMessages, { role: "assistant", content: localReply }],
-        updatedAt: Date.now(),
-      });
-      setLoading(false);
+      await revealAssistantReply(chat.id, nextMessages, localReply);
       return;
     }
 
@@ -164,17 +167,43 @@ function AITutorPage() {
       },
     });
 
-    updateChat(chat.id, {
-      messages: [...nextMessages, { role: "assistant", content: response.reply }],
-      updatedAt: Date.now(),
-    });
-    setLoading(false);
+    await revealAssistantReply(chat.id, nextMessages, response.reply);
   };
 
   const updateChat = (id: string, patch: Partial<TutorChat>) => {
     setChats((items) =>
       items.map((item) => (item.id === id ? { ...item, ...patch, updatedAt: Date.now() } : item)),
     );
+  };
+
+  const revealAssistantReply = async (chatId: string, baseMessages: TutorMessage[], fullReply: string) => {
+    typingRef.current = true;
+    setIsTyping(true);
+    setLoading(false);
+    const messageKey = `${chatId}:${baseMessages.length}`;
+    setStreamingMessageKey(messageKey);
+    const assistantMessage: TutorMessage = { role: "assistant", content: "" };
+    updateChat(chatId, { messages: [...baseMessages, assistantMessage], updatedAt: Date.now() });
+
+    try {
+      let visible = "";
+      for (const chunk of chunkTutorReply(fullReply)) {
+        visible += chunk;
+        updateChat(chatId, {
+          messages: [...baseMessages, { role: "assistant", content: visible }],
+          updatedAt: Date.now(),
+        });
+        await waitForTyping(chunk);
+      }
+    } finally {
+      typingRef.current = false;
+      setIsTyping(false);
+      setStreamingMessageKey(null);
+      setChats((items) => {
+        saveChats(items);
+        return items;
+      });
+    }
   };
 
   const createChat = () => {
@@ -305,7 +334,9 @@ function AITutorPage() {
                 </div>
               </div>
             )}
-            {activeChat?.messages.map((item, index) => (
+            {activeChat?.messages.map((item, index) => {
+              const messageKey = `${activeChat.id}:${index}`;
+              return (
               <div
                 key={`${item.role}-${index}`}
                 className={`animate-message-in tutor-message-row flex gap-3 ${
@@ -326,7 +357,11 @@ function AITutorPage() {
                   }`}
                 >
                   {item.role === "assistant" ? (
-                    <TutorMarkdown content={item.content} mode={mode} />
+                    <TutorMarkdown
+                      content={item.content}
+                      mode={mode}
+                      streaming={streamingMessageKey === messageKey}
+                    />
                   ) : (
                     item.content
                   )}
@@ -337,7 +372,8 @@ function AITutorPage() {
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
             {loading && (
               <div className="animate-message-in flex items-center gap-3 text-sm text-muted-foreground">
                 <div className="tutor-avatar grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
@@ -373,7 +409,7 @@ function AITutorPage() {
               <button
                 type="button"
                 onClick={sendMessage}
-                disabled={loading || !message.trim()}
+                disabled={loading || isTyping || !message.trim()}
                 className="interactive-button tutor-send-button grid h-12 w-12 place-items-center rounded-full bg-primary text-primary-foreground shadow-glow disabled:opacity-50"
               >
                 <Send className="h-4 w-4" />
@@ -400,12 +436,32 @@ function titleFrom(message: string) {
   return message.length > 34 ? `${message.slice(0, 34)}...` : message;
 }
 
-function TutorMarkdown({ content, mode }: { content: string; mode: string }) {
+function chunkTutorReply(text: string) {
+  return text.match(/\S+\s*/g) ?? [text];
+}
+
+function waitForTyping(chunk: string) {
+  const sentencePause = /[.!?]\s*$/.test(chunk) ? 130 : 0;
+  const linePause = chunk.includes("\n") ? 160 : 0;
+  const lengthDelay = Math.min(95, Math.max(36, chunk.length * 5));
+  return new Promise((resolve) => window.setTimeout(resolve, lengthDelay + sentencePause + linePause));
+}
+
+function TutorMarkdown({
+  content,
+  mode,
+  streaming = false,
+}: {
+  content: string;
+  mode: string;
+  streaming?: boolean;
+}) {
   const blocks = parseMarkdownBlocks(content);
   return (
     <div className="tutor-markdown">
       <ModeBadge mode={mode} />
       {blocks.map((block, index) => renderMarkdownBlock(block, index))}
+      {streaming && <span className="tutor-streaming-cursor" aria-hidden="true" />}
     </div>
   );
 }
@@ -696,6 +752,7 @@ function getCalloutKind(text: string) {
 type TutorIntent =
   | "greeting"
   | "general"
+  | "choose-for-me"
   | "subject-specific"
   | "marking"
   | "model-answer"
@@ -710,6 +767,9 @@ function detectTutorIntent(message: string, mode: string): TutorIntent {
   if (/mark|grade|score|how many marks/.test(text) || mode === "Mark My Answer") return "marking";
   if (/model answer|sample answer|full[-\s]?mark answer/.test(text)) return "model-answer";
   if (/keyword|key word|definition/.test(text)) return "keyword";
+  if (/(choose|pick|decide|select).*(for me)|you choose|you pick|surprise me|anything is fine|what should i do/i.test(text)) {
+    return "choose-for-me";
+  }
   if (/revise|revision|plan|coach|weak|recommend/.test(text) || mode === "Weak Topic Coach") {
     return "revision-coaching";
   }
@@ -722,25 +782,59 @@ function getLocalTutorReply({
   text,
   selectedSubject,
   selectedTopic,
+  profileSubjects,
+  weakestSubject,
+  weakTopics,
 }: {
   intent: TutorIntent;
   text: string;
   selectedSubject: string | null;
   selectedTopic: string | null;
+  profileSubjects: string[];
+  weakestSubject: string;
+  weakTopics: string[];
 }) {
   if (intent === "greeting") {
     return "Hey! What subject or question do you want help with today?";
   }
+  if (intent === "choose-for-me") {
+    const subject = selectedSubject || normaliseTutorChoice(weakestSubject) || profileSubjects[0] || "Chemistry";
+    const topic = selectedTopic || weakTopics[0] || defaultTopicForSubject(subject);
+    return [
+      `Alright, I\x27ll choose: **${subject} - ${topic}**.`,
+      "",
+      "Good one to do now. It is the kind of topic where a few precise keywords can be the difference between a vague answer and proper marks.",
+      "",
+      `Send me a quick exam-style answer about **${topic}**. It does not need to be perfect - just write what you would actually put in the exam, and I will mark it properly.`,
+      "",
+      `Try this: explain one key idea from **${topic}** in 3-4 sentences.`,
+    ].join("\n");
+  }
   if (intent === "marking" && !selectedSubject) {
     return "Sure. Send me the subject, question, total marks, mark scheme if you have it, and your answer. Then I can mark it properly.";
   }
-  if (intent === "general" && !selectedSubject && !inferSubjectFromMessage(text)) {
-    return "What subject or topic do you want help with? You can choose a subject above or type something like 'Help me with electrolysis'.";
-  }
-  if (!selectedSubject && !inferSubjectFromMessage(text) && !selectedTopic) {
-    return "Choose a subject or tell me the topic first, then I can give focused IGCSE/GCSE help.";
-  }
   return "";
+}
+
+function normaliseTutorChoice(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || /^none|not sure|n\/a|na$/i.test(trimmed)) return "";
+  return trimmed;
+}
+
+function defaultTopicForSubject(subject: string) {
+  const text = subject.toLowerCase();
+  if (text.includes("chem")) return "Electrolysis";
+  if (text.includes("physics")) return "Forces and Motion";
+  if (text.includes("math")) return "Algebra";
+  if (text.includes("computer")) return "Algorithms";
+  if (text.includes("business")) return "Business Activity";
+  if (text.includes("economic")) return "Market Failure";
+  if (text.includes("geography")) return "River Processes";
+  if (text.includes("history")) return "Source Analysis";
+  if (text.includes("english language")) return "Transactional Writing";
+  if (text.includes("english literature")) return "Theme Analysis";
+  return "Exam Technique";
 }
 
 function inferSubjectFromMessage(message: string) {
@@ -810,4 +904,6 @@ function readChats(): TutorChat[] {
 function saveChats(chats: TutorChat[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(CHAT_KEY, JSON.stringify(chats.slice(0, 20)));
+  window.dispatchEvent(new Event("markwise:ai-tutor-chats:changed"));
+  requestUserDataSync();
 }

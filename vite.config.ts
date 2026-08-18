@@ -16,11 +16,12 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
+    cacheDir: ".vite-cache",
     server: {
-      host: "localhost",
-      port: 3000,
+      host: "0.0.0.0",
+      port: 3001,
       strictPort: true,
-      open: true,
+      open: false,
     },
   },
 });

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 import { getCurrentUser } from "./auth";
 import { db } from "./firebase";
+import { requestUserDataSync } from "./userDataSync";
 
 export type Attempt = {
   id: string;
@@ -46,6 +47,7 @@ function writeLocalAttempts(userId: string, items: Attempt[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(storageKey(userId), JSON.stringify(items));
   window.dispatchEvent(new Event(ATTEMPTS_EVENT));
+  requestUserDataSync();
 }
 
 function write(userId: string, items: Attempt[]) {
@@ -158,6 +160,7 @@ function writeFlashcards(userId: string, items: MistakeFlashcard[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(flashcardStorageKey(userId), JSON.stringify(items));
   window.dispatchEvent(new Event("markwise:flashcards:changed"));
+  requestUserDataSync();
 }
 
 export function recordFlashcards(cards: Omit<MistakeFlashcard, "userId">[]) {

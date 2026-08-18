@@ -73,11 +73,11 @@ export const MARKWISE_THEMES = [
 
 export type MarkwiseThemeId = (typeof MARKWISE_THEMES)[number]["id"];
 
-export const DEFAULT_THEME: MarkwiseThemeId = "light";
+export const DEFAULT_THEME: MarkwiseThemeId = "dark";
 export const THEME_STORAGE_KEYS = ["markwise:theme", "markwise-theme"] as const;
 
 export function getTheme(themeId: string | null | undefined) {
-  return MARKWISE_THEMES.find((theme) => theme.id === themeId) ?? MARKWISE_THEMES[0];
+  return MARKWISE_THEMES.find((theme) => theme.id === themeId) ?? MARKWISE_THEMES.find((theme) => theme.id === DEFAULT_THEME)!;
 }
 
 export function readStoredTheme(): MarkwiseThemeId {

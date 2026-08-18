@@ -26,7 +26,13 @@ import { aqaGCSEHistory8145Batch6 } from "./aqa_gcse_history_8145_batch6";
 import { aqaGCSEHistory8145Batch7 } from "./aqa_gcse_history_8145_batch7";
 import { aqaGCSEHistory8145Batch8 } from "./aqa_gcse_history_8145_batch8";
 import { aqaGCSEHistory8145Batch9 } from "./aqa_gcse_history_8145_batch9";
-import { aqaGCSEMathsNumberQuestions } from "./aqa_gcse_maths_8300_number";
+import {
+  aqaGCSEMathsNumberQuestions,
+  aqaGCSEMathsAlgebraQuestions,
+  aqaGCSEMathsRatioProportionRatesQuestions,
+  aqaGCSEMathsGeometryMeasuresQuestions,
+  aqaGCSEMathsProbabilityStatisticsQuestions,
+} from "./aqa_gcse_maths_8300_number";
 import { cambridgeIGCSEBusiness0450Batch1 } from "./cambridge_igcse_business_0450_batch1";
 import { cambridgeIGCSEBusiness0450Batch2 } from "./cambridge_igcse_business_0450_batch2";
 import { cambridgeIGCSEBusiness0450Batch3 } from "./cambridge_igcse_business_0450_batch3";
@@ -48,8 +54,20 @@ import { cambridgeIGCSEJapanese0716Batch1 } from "./cambridge_igcse_japanese_071
 import { cambridgeIGCSEJapanese0716Batch2 } from "./cambridge_igcse_japanese_0716_batch2";
 import { cambridgeIGCSEJapanese0716Batch3 } from "./cambridge_igcse_japanese_0716_batch3";
 import { cambridgeIGCSEJapanese0716Batch4 } from "./cambridge_igcse_japanese_0716_batch4";
-import { cambridgeIGCSEMathsNumberQuestions } from "./cambridge_igcse_maths_0580_number";
-import { edexcelIGCSEMathsNumberQuestions } from "./edexcel_igcse_maths_4ma1_number";
+import {
+  cambridgeIGCSEMathsNumberQuestions,
+  cambridgeIGCSEMathsAlgebraQuestions,
+  cambridgeIGCSEMathsGeometryMensurationQuestions,
+  cambridgeIGCSEMathsGraphsFunctionsQuestions,
+  cambridgeIGCSEMathsStatisticsProbabilityQuestions,
+} from "./cambridge_igcse_maths_0580_number";
+import {
+  edexcelIGCSEMathsNumberQuestions,
+  edexcelIGCSEMathsAlgebraQuestions,
+  edexcelIGCSEMathsSequencesFunctionsGraphsQuestions,
+  edexcelIGCSEMathsGeometryTrigonometryQuestions,
+  edexcelIGCSEMathsStatisticsProbabilityQuestions,
+} from "./edexcel_igcse_maths_4ma1_number";
 import { edexcelInternationalGCSEBusiness4BS1Batch1 } from "./edexcel_international_gcse_business_4bs1_batch1";
 import { edexcelInternationalGCSEBusiness4BS1Batch2 } from "./edexcel_international_gcse_business_4bs1_batch2";
 import { edexcelInternationalGCSEBusiness4BS1Batch3 } from "./edexcel_international_gcse_business_4bs1_batch3";
@@ -113,8 +131,30 @@ import { ocrGCSEHistoryBJ411Batch6 } from "./ocr_gcse_history_b_j411_batch6";
 import { ocrGCSEHistoryBJ411Batch7 } from "./ocr_gcse_history_b_j411_batch7";
 import { ocrGCSEHistoryBJ411Batch8 } from "./ocr_gcse_history_b_j411_batch8";
 import { ocrGCSEHistoryBJ411Batch9 } from "./ocr_gcse_history_b_j411_batch9";
-import { ocrGCSEMathsNumberOperationsIntegersQuestions } from "./ocr_gcse_maths_j560_number";
-import { oxfordAQAMathsNumberQuestions } from "./oxfordaqa_igcse_maths_9260_number";
+import {
+  ocrGCSEMathsAdvancedGeometryTrigonometryQuestions,
+  ocrGCSEMathsAlgebraExpressionsEquationsQuestions,
+  ocrGCSEMathsFinalHigherSynopticMockQuestions,
+  ocrGCSEMathsFractionsDecimalsPercentagesQuestions,
+  ocrGCSEMathsGeometryMeasuresQuestions,
+  ocrGCSEMathsGrade9ProblemSolvingQuestions,
+  ocrGCSEMathsGraphsFunctionsQuestions,
+  ocrGCSEMathsHarderProbabilityStatisticsQuestions,
+  ocrGCSEMathsHigherAlgebraQuestions,
+  ocrGCSEMathsIndicesSurdsStandardFormQuestions,
+  ocrGCSEMathsNumberOperationsIntegersQuestions,
+  ocrGCSEMathsPaper456MixedMockQuestions,
+  ocrGCSEMathsProbabilityStatisticsQuestions,
+  ocrGCSEMathsRatioProportionRatesQuestions,
+  ocrGCSEMathsTransformationsVectorsQuestions,
+} from "./ocr_gcse_maths_j560_number";
+import {
+  oxfordAQAMathsNumberQuestions,
+  oxfordAQAMathsAlgebraQuestions,
+  oxfordAQAMathsRatioProportionRatesQuestions,
+  oxfordAQAMathsGeometryMeasuresQuestions,
+  oxfordAQAMathsProbabilityStatisticsQuestions,
+} from "./oxfordaqa_igcse_maths_9260_number";
 import { oxfordAQAInternationalGCSEComputerScience9210Batch1 } from "./oxfordaqa_international_gcse_computer_science_9210_batch1";
 import { oxfordAQAInternationalGCSEComputerScience9210Batch2 } from "./oxfordaqa_international_gcse_computer_science_9210_batch2";
 import { oxfordAQAInternationalGCSEEconomics9214Batch1 } from "./oxfordaqa_international_gcse_economics_9214_batch1";
@@ -151,6 +191,10 @@ export const PROVIDED_RAW_QUESTION_PACKS = [
   ...aqaGCSEHistory8145Batch8,
   ...aqaGCSEHistory8145Batch9,
   ...aqaGCSEMathsNumberQuestions,
+  ...aqaGCSEMathsAlgebraQuestions,
+  ...aqaGCSEMathsRatioProportionRatesQuestions,
+  ...aqaGCSEMathsGeometryMeasuresQuestions,
+  ...aqaGCSEMathsProbabilityStatisticsQuestions,
   ...cambridgeIGCSEBusiness0450Batch1,
   ...cambridgeIGCSEBusiness0450Batch2,
   ...cambridgeIGCSEBusiness0450Batch3,
@@ -173,7 +217,15 @@ export const PROVIDED_RAW_QUESTION_PACKS = [
   ...cambridgeIGCSEJapanese0716Batch3,
   ...cambridgeIGCSEJapanese0716Batch4,
   ...cambridgeIGCSEMathsNumberQuestions,
+  ...cambridgeIGCSEMathsAlgebraQuestions,
+  ...cambridgeIGCSEMathsGeometryMensurationQuestions,
+  ...cambridgeIGCSEMathsGraphsFunctionsQuestions,
+  ...cambridgeIGCSEMathsStatisticsProbabilityQuestions,
   ...edexcelIGCSEMathsNumberQuestions,
+  ...edexcelIGCSEMathsAlgebraQuestions,
+  ...edexcelIGCSEMathsSequencesFunctionsGraphsQuestions,
+  ...edexcelIGCSEMathsGeometryTrigonometryQuestions,
+  ...edexcelIGCSEMathsStatisticsProbabilityQuestions,
   ...edexcelInternationalGCSEBusiness4BS1Batch1,
   ...edexcelInternationalGCSEBusiness4BS1Batch2,
   ...edexcelInternationalGCSEBusiness4BS1Batch3,
@@ -238,7 +290,25 @@ export const PROVIDED_RAW_QUESTION_PACKS = [
   ...ocrGCSEHistoryBJ411Batch8,
   ...ocrGCSEHistoryBJ411Batch9,
   ...ocrGCSEMathsNumberOperationsIntegersQuestions,
+  ...ocrGCSEMathsFractionsDecimalsPercentagesQuestions,
+  ...ocrGCSEMathsIndicesSurdsStandardFormQuestions,
+  ...ocrGCSEMathsRatioProportionRatesQuestions,
+  ...ocrGCSEMathsAlgebraExpressionsEquationsQuestions,
+  ...ocrGCSEMathsGraphsFunctionsQuestions,
+  ...ocrGCSEMathsGeometryMeasuresQuestions,
+  ...ocrGCSEMathsProbabilityStatisticsQuestions,
+  ...ocrGCSEMathsTransformationsVectorsQuestions,
+  ...ocrGCSEMathsPaper456MixedMockQuestions,
+  ...ocrGCSEMathsHigherAlgebraQuestions,
+  ...ocrGCSEMathsAdvancedGeometryTrigonometryQuestions,
+  ...ocrGCSEMathsHarderProbabilityStatisticsQuestions,
+  ...ocrGCSEMathsGrade9ProblemSolvingQuestions,
+  ...ocrGCSEMathsFinalHigherSynopticMockQuestions,
   ...oxfordAQAMathsNumberQuestions,
+  ...oxfordAQAMathsAlgebraQuestions,
+  ...oxfordAQAMathsRatioProportionRatesQuestions,
+  ...oxfordAQAMathsGeometryMeasuresQuestions,
+  ...oxfordAQAMathsProbabilityStatisticsQuestions,
   ...oxfordAQAInternationalGCSEComputerScience9210Batch1,
   ...oxfordAQAInternationalGCSEComputerScience9210Batch2,
   ...oxfordAQAInternationalGCSEEconomics9214Batch1,

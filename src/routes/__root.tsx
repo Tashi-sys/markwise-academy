@@ -121,7 +121,7 @@ function RootShell({ children }: { children: ReactNode }) {
                   var storedTheme = localStorage.getItem("markwise:theme") || localStorage.getItem("markwise-theme");
                   var knownThemes = ["light", "dark", "ocean", "forest", "sunset", "midnight", "crimson-neon", "ultraviolet", "cyber-mint", "arcade-blue"];
                   var darkThemes = ["dark", "midnight", "crimson-neon", "ultraviolet", "cyber-mint", "arcade-blue"];
-                  var theme = knownThemes.indexOf(storedTheme) >= 0 ? storedTheme : "light";
+                  var theme = knownThemes.indexOf(storedTheme) >= 0 ? storedTheme : "dark";
                   document.documentElement.dataset.theme = theme;
                   document.documentElement.classList.toggle("dark", darkThemes.indexOf(theme) >= 0);
                 } catch (_) {}

@@ -1,12 +1,20 @@
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
+import { z } from "zod";
 import { filterQuestions } from "../data/questionBank";
-import { getTopicMeta, getSubjectName } from "../lib/questions";
+import { getTopicMeta } from "../lib/questions";
 import { useAuth } from "../lib/auth";
-import { getSyllabusCode } from "../data/syllabusConfig";
+import { getExamBoard, getSubjectName, getSyllabusCode } from "../data/syllabusConfig";
+import { findUserSubjectSyllabus } from "../lib/userSyllabus";
+
+const practiceSearch = z.object({
+  examBoard: z.string().optional(),
+  qualification: z.string().optional(),
+});
 
 export const Route = createFileRoute("/app/practice/$subject/$topic")({
+  validateSearch: (s) => practiceSearch.parse(s),
   component: PracticeSetup,
 });
 
@@ -16,6 +24,7 @@ type Mode = "practice" | "exam" | "hint";
 
 function PracticeSetup() {
   const { subject, topic } = Route.useParams();
+  const search = Route.useSearch();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [length, setLength] = useState<Length>("any");
@@ -24,15 +33,16 @@ function PracticeSetup() {
 
   if (!user) return null;
 
-  if (!user.selectedSubjects.includes(subject)) {
-    throw notFound();
-  }
+  const selection = findUserSubjectSyllabus(user, subject, search.examBoard, search.qualification);
+  if (!selection) throw notFound();
 
+  const activeExamBoard = selection.examBoard;
+  const activeQualification = selection.qualification;
   const meta = getTopicMeta(subject, topic);
-  const syllabusCode = getSyllabusCode(user.examBoard, subject);
+  const syllabusCode = getSyllabusCode(activeExamBoard, subject);
   const all = filterQuestions({
-    qualification: user.qualification,
-    examBoard: user.examBoard,
+    qualification: activeQualification,
+    examBoard: activeExamBoard,
     subject,
     syllabusCode,
     topic,
@@ -47,6 +57,7 @@ function PracticeSetup() {
           <Link
             to="/app/topics/$subject"
             params={{ subject }}
+            search={{ examBoard: activeExamBoard, qualification: activeQualification }}
             className="mt-4 inline-block text-sm font-medium text-primary hover:underline"
           >
             Back to topics
@@ -70,11 +81,14 @@ function PracticeSetup() {
     navigate({ to: "/app/question/$id", params: { id: pick.id }, search: { mode } });
   };
 
+  const board = getExamBoard(activeExamBoard);
+
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       <div>
         <div className="text-sm text-muted-foreground">
-          {getSubjectName(user.examBoard, subject)}
+          {getSubjectName(activeExamBoard, subject)} · {board?.name ?? activeExamBoard}
+          {syllabusCode ? ` · ${syllabusCode}` : ""}
         </div>
         <h1 className="text-3xl font-bold tracking-tight">{meta.name}</h1>
         <p className="mt-1 text-muted-foreground">{meta.blurb}</p>
@@ -86,9 +100,9 @@ function PracticeSetup() {
           onChange={setLength}
           options={[
             { v: "any", l: "Mixed" },
-            { v: "1-2", l: "1–2 marks" },
-            { v: "3-4", l: "3–4 marks" },
-            { v: "5-6", l: "5–6 marks" },
+            { v: "1-2", l: "1-2 marks" },
+            { v: "3-4", l: "3-4 marks" },
+            { v: "5-6", l: "5-6 marks" },
           ]}
         />
       </Section>
@@ -108,24 +122,9 @@ function PracticeSetup() {
 
       <Section title="Mode">
         <div className="grid gap-3 md:grid-cols-3">
-          <ModeCard
-            active={mode === "practice"}
-            onClick={() => setMode("practice")}
-            title="Practice"
-            body="Hints + feedback after every answer."
-          />
-          <ModeCard
-            active={mode === "exam"}
-            onClick={() => setMode("exam")}
-            title="Exam"
-            body="Timed. Feedback only at the end."
-          />
-          <ModeCard
-            active={mode === "hint"}
-            onClick={() => setMode("hint")}
-            title="Hint"
-            body="Reveal layered hints before submitting."
-          />
+          <ModeCard active={mode === "practice"} onClick={() => setMode("practice")} title="Practice" body="Hints + feedback after every answer." />
+          <ModeCard active={mode === "exam"} onClick={() => setMode("exam")} title="Exam" body="Timed. Feedback only at the end." />
+          <ModeCard active={mode === "hint"} onClick={() => setMode("hint")} title="Hint" body="Reveal layered hints before submitting." />
         </div>
       </Section>
 
@@ -153,15 +152,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function ChoiceRow<T extends string>({
-  value,
-  onChange,
-  options,
-}: {
-  value: T;
-  onChange: (v: T) => void;
-  options: { v: T; l: string }[];
-}) {
+function ChoiceRow<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { v: T; l: string }[] }) {
   return (
     <div className="flex flex-wrap gap-2">
       {options.map((o) => {
@@ -185,17 +176,7 @@ function ChoiceRow<T extends string>({
   );
 }
 
-function ModeCard({
-  active,
-  onClick,
-  title,
-  body,
-}: {
-  active: boolean;
-  onClick: () => void;
-  title: string;
-  body: string;
-}) {
+function ModeCard({ active, onClick, title, body }: { active: boolean; onClick: () => void; title: string; body: string }) {
   return (
     <button
       type="button"

@@ -1070,7 +1070,18 @@
     color: var(--foreground);
   }
 
-  .typing-dots {
+  .tutor-streaming-cursor {
+    display: inline-block;
+    width: 0.55rem;
+    height: 1.15em;
+    margin-left: 0.16rem;
+    transform: translateY(0.18em);
+    border-radius: 999px;
+    background: var(--primary);
+    animation: tutor-cursor-blink 0.85s steps(2, start) infinite;
+  }
+
+    .typing-dots {
     display: inline-flex;
     gap: 0.22rem;
     align-items: center;
@@ -1502,7 +1513,18 @@
     }
   }
 
-  @keyframes typing-dot {
+  @keyframes tutor-cursor-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  46%,
+  100% {
+    opacity: 0.18;
+  }
+}
+
+@keyframes typing-dot {
     0%,
     70%,
     100% {
