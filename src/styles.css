@@ -65,8 +65,8 @@
   --color-warning-foreground: var(--warning-foreground);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", "Noto Sans SC", "Noto Sans JP", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter", "Noto Sans SC", "Noto Sans JP", ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {
