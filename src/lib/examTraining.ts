@@ -3,6 +3,7 @@ import type { Attempt } from "./storage";
 import { getTopicMeta } from "../data/topicsConfig";
 import { getQuestion } from "../data/questionBank";
 import type { MarkResult } from "./marking";
+import { isMathsSubject } from "./mathAnswer";
 
 export type CommandWord = {
   word: string;
@@ -141,8 +142,8 @@ export function answerQualityTags(answer: string, question: Question, result: Ma
   ) {
     tags.add("Needs cause and effect");
   }
-  if (words < question.marks * 5) tags.add("Too short");
-  if (question.marks <= 2 && words > 55) tags.add("Too long");
+  if (!isMathsSubject(question.subject) && words < question.marks * 5) tags.add("Too short");
+  if (!isMathsSubject(question.subject) && question.marks <= 2 && words > 55) tags.add("Too long");
   if (question.examinerKeywords.some((kw) => normalise(answer).includes(normalise(kw)))) {
     tags.add("Strong use of terminology");
   }

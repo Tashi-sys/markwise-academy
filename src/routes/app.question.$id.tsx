@@ -1,5 +1,6 @@
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 import {
   Check,
   CircleAlert,
@@ -11,7 +12,20 @@ import {
   RotateCcw,
   AlertTriangle,
   BadgeCheck,
+  LoaderCircle,
 } from "lucide-react";
+import { MathAnswerEditor } from "../components/MathAnswerEditor";
+import { isMathsSubject } from "../lib/mathAnswer";
+import {
+  advancePracticeSession,
+  completePracticeSession,
+  ensurePracticeSession,
+  getPracticeQuestionState,
+  readPracticeSession,
+  savePracticeQuestionState,
+  type PracticeMode,
+  type PracticeQuestionState,
+} from "../lib/practiceSession";
 import {
   getQuestion,
   getTopicMeta,
@@ -67,38 +81,89 @@ export const Route = createFileRoute("/app/question/$id")({
 function QuestionPage() {
   const { question } = Route.useLoaderData() as { question: Question };
   const { mode } = Route.useSearch();
-  const navigate = useNavigate();
   const { user } = useAuth();
-  const [answer, setAnswer] = useState("");
-  const [hintsShown, setHintsShown] = useState(0);
-  const [result, setResult] = useState<MarkResult | null>(null);
-  const [elapsed, setElapsed] = useState(0);
-  const [firstScore, setFirstScore] = useState<{ score: number; total: number } | null>(null);
-
-  useEffect(() => {
-    if (result) return;
-    const t = window.setInterval(() => setElapsed((e) => e + 1), 1000);
-    return () => window.clearInterval(t);
-  }, [result]);
-
-  useEffect(() => {
-    setFirstScore(null);
-  }, [question.id]);
 
   if (!user) return null;
+  if (!canUseQuestion(user, question)) throw notFound();
 
-  if (!canUseQuestion(user, question)) {
-    throw notFound();
-  }
+  return (
+    <PracticeQuestion
+      key={`${user.id}:${question.id}:${mode}`}
+      question={question}
+      mode={mode}
+      userId={user.id}
+    />
+  );
+}
+
+function PracticeQuestion({
+  question,
+  mode,
+  userId,
+}: {
+  question: Question;
+  mode: PracticeMode;
+  userId: string;
+}) {
+  const navigate = useNavigate();
+  const [state, setState] = useState<PracticeQuestionState>({
+    answer: "",
+    hintsShown: 0,
+    result: null,
+    elapsed: 0,
+    firstScore: null,
+  });
+  const { answer, hintsShown, result, elapsed, firstScore } = state;
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [nextLoading, setNextLoading] = useState(false);
+  const navigationPending = useRef(false);
+  const setAnswer = (value: string) => setState((current) => ({ ...current, answer: value }));
+
+  useEffect(() => {
+    const session = ensurePracticeSession(
+      userId,
+      question,
+      filterQuestions({
+        examBoard: question.examBoard,
+        qualification: question.qualification,
+        subject: question.subject,
+        topic: question.topic,
+      }),
+      mode,
+    );
+    setState(getPracticeQuestionState(session, question.id));
+    setSessionId(session.id);
+  }, [userId, question, mode]);
+
+  useEffect(() => {
+    if (sessionId) savePracticeQuestionState(userId, sessionId, question.id, state);
+  }, [userId, sessionId, question.id, state]);
+
+  useEffect(() => {
+    if (!sessionId || result || nextLoading) return;
+    const t = window.setInterval(
+      () =>
+        setState((current) => ({
+          ...current,
+          elapsed: current.elapsed + 1,
+        })),
+      1000,
+    );
+    return () => window.clearInterval(t);
+  }, [sessionId, result, nextLoading]);
 
   const meta = getTopicMeta(question.subject, question.topic);
   const subjectLabel = getSubjectName(question.examBoard, question.subject);
+  const isMaths = isMathsSubject(question.subject);
 
   const submit = () => {
-    if (answer.trim().length === 0) return;
+    if (answer.trim().length === 0 || nextLoading || result || !sessionId) return;
     const r = markAnswer(question, answer);
-    setResult(r);
-    if (!firstScore) setFirstScore({ score: r.score, total: r.total });
+    setState((current) => ({
+      ...current,
+      result: r,
+      firstScore: current.firstScore ?? { score: r.score, total: r.total },
+    }));
     const qualityTags = answerQualityTags(answer, question, r);
     recordAttempt({
       questionId: question.id,
@@ -123,29 +188,49 @@ function QuestionPage() {
   };
 
   const reset = () => {
-    setAnswer("");
-    setHintsShown(0);
-    setResult(null);
-    setElapsed(0);
+    if (navigationPending.current) return;
+    setState((current) => ({
+      answer: "",
+      hintsShown: 0,
+      result: null,
+      elapsed: 0,
+      firstScore: current.firstScore,
+    }));
   };
 
-  const nextQuestion = () => {
-    const pool = filterQuestions({
-      examBoard: question.examBoard,
-      qualification: question.qualification,
-      subject: question.subject,
-      topic: question.topic,
-    }).filter((q) => q.id !== question.id);
-    const pick = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : null;
-    if (pick) {
-      navigate({ to: "/app/question/$id", params: { id: pick.id }, search: { mode } });
-      reset();
-    } else {
-      navigate({
-        to: "/app/topics/$subject",
-        params: { subject: question.subject },
-        search: { examBoard: question.examBoard, qualification: question.qualification },
-      });
+  const nextQuestion = async () => {
+    if (!sessionId || navigationPending.current) return;
+    navigationPending.current = true;
+    setNextLoading(true);
+    try {
+      const session =
+        savePracticeQuestionState(userId, sessionId, question.id, state) ??
+        readPracticeSession(userId);
+      if (!session || session.id !== sessionId || session.currentQuestionId !== question.id) {
+        throw new Error("The practice session has changed. Please resume it from your dashboard.");
+      }
+      const currentIndex = session.questionIds.indexOf(question.id);
+      const nextId = session.questionIds.slice(currentIndex + 1).find((id) => getQuestion(id));
+      if (nextId) {
+        // The destination restores its own snapshot before moving the session cursor.
+        await navigate({ to: "/app/question/$id", params: { id: nextId }, search: { mode } });
+      } else {
+        await navigate({
+          to: "/app/topics/$subject",
+          params: { subject: question.subject },
+          search: { examBoard: question.examBoard, qualification: question.qualification },
+        });
+        completePracticeSession(userId, sessionId, question.id);
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Couldn’t load the next question. Please try again.",
+      );
+    } finally {
+      navigationPending.current = false;
+      setNextLoading(false);
     }
   };
 
@@ -153,10 +238,37 @@ function QuestionPage() {
   const seconds = elapsed % 60;
   const commandWord = detectCommandWord(question.questionText);
   const redFlags = detectRedFlags(answer);
-  const lengthFeedback = answerLengthFeedback(answer, question.marks);
+  const lengthFeedback = isMaths ? null : answerLengthFeedback(answer, question.marks);
+
+  if (!sessionId) {
+    return (
+      <div role="status" className="p-8 text-center text-muted-foreground">
+        Restoring your practice…
+      </div>
+    );
+  }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6" aria-busy={nextLoading}>
+      <Dialog.Root open={nextLoading}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-background/70 backdrop-blur-sm" />
+          <Dialog.Content
+            className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-border bg-card p-8 text-center shadow-soft outline-none"
+            onEscapeKeyDown={(event) => event.preventDefault()}
+            onPointerDownOutside={(event) => event.preventDefault()}
+          >
+            <LoaderCircle
+              className="mx-auto mb-4 h-8 w-8 animate-spin text-primary"
+              aria-hidden="true"
+            />
+            <Dialog.Title className="text-lg font-semibold">Loading next question</Dialog.Title>
+            <Dialog.Description className="mt-2 text-sm text-muted-foreground">
+              Your progress is saved. Getting your next question ready…
+            </Dialog.Description>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <span>{subjectLabel}</span>
@@ -189,16 +301,26 @@ function QuestionPage() {
           </div>
         )}
 
-        <textarea
-          value={answer}
-          onChange={(e) => setAnswer(e.target.value)}
-          disabled={!!result}
-          placeholder="Type your answer here..."
-          rows={8}
-          className="mt-6 w-full resize-y rounded-2xl border border-input bg-background px-4 py-3 text-sm leading-relaxed shadow-inner outline-none ring-primary/30 placeholder:text-muted-foreground focus:scale-[1.01] focus:ring-2 disabled:opacity-70"
-        />
+        {isMaths ? (
+          <MathAnswerEditor
+            value={answer}
+            onChange={setAnswer}
+            disabled={!!result || nextLoading}
+            resetKey={question.id}
+          />
+        ) : (
+          <textarea
+            aria-label="Your answer"
+            value={answer}
+            onChange={(e) => setAnswer(e.target.value)}
+            disabled={!!result || nextLoading}
+            placeholder="Type your answer here..."
+            rows={8}
+            className="mt-6 w-full resize-y rounded-2xl border border-input bg-background px-4 py-3 text-sm leading-relaxed shadow-inner outline-none ring-primary/30 placeholder:text-muted-foreground focus:scale-[1.01] focus:ring-2 disabled:opacity-70"
+          />
+        )}
 
-        {!result && answer.trim().length > 0 && (
+        {!isMaths && !result && answer.trim().length > 0 && (
           <div className="animate-enter mt-2 text-right text-xs text-muted-foreground">
             {answer.trim().split(/\s+/).filter(Boolean).length} words · aim for about{" "}
             {question.marks * 8} words
@@ -231,7 +353,7 @@ function QuestionPage() {
             <button
               type="button"
               onClick={submit}
-              disabled={answer.trim().length === 0}
+              disabled={answer.trim().length === 0 || nextLoading}
               className="interactive-button inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-glow transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Sparkles className="h-4 w-4" />
@@ -240,8 +362,13 @@ function QuestionPage() {
             {mode !== "exam" && (
               <button
                 type="button"
-                onClick={() => setHintsShown((h) => Math.min(h + 1, question.hints.length))}
-                disabled={hintsShown >= question.hints.length}
+                onClick={() =>
+                  setState((current) => ({
+                    ...current,
+                    hintsShown: Math.min(current.hintsShown + 1, question.hints.length),
+                  }))
+                }
+                disabled={hintsShown >= question.hints.length || nextLoading}
                 className="interactive-button inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-secondary disabled:opacity-50"
               >
                 <Lightbulb className="h-4 w-4 text-warning" />
@@ -253,10 +380,15 @@ function QuestionPage() {
             <button
               type="button"
               onClick={nextQuestion}
+              disabled={nextLoading}
               className="interactive-button inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-secondary"
             >
-              <SkipForward className="h-4 w-4" />
-              Skip
+              {nextLoading ? (
+                <LoaderCircle className="h-4 w-4 animate-spin" />
+              ) : (
+                <SkipForward className="h-4 w-4" />
+              )}
+              {nextLoading ? "Loading…" : "Skip"}
             </button>
           </div>
         )}
@@ -290,6 +422,7 @@ function QuestionPage() {
           firstScore={firstScore}
           onTryAgain={reset}
           onNext={nextQuestion}
+          nextLoading={nextLoading}
         />
       )}
     </div>
@@ -304,6 +437,7 @@ function FeedbackPanel({
   firstScore,
   onTryAgain,
   onNext,
+  nextLoading,
 }: {
   result: MarkResult;
   answer: string;
@@ -312,6 +446,7 @@ function FeedbackPanel({
   firstScore: { score: number; total: number } | null;
   onTryAgain: () => void;
   onNext: () => void;
+  nextLoading: boolean;
 }) {
   const pct = Math.round((result.score / result.total) * 100);
   const fallbackUpgrade = useMemo(
@@ -375,6 +510,7 @@ function FeedbackPanel({
             <button
               type="button"
               onClick={onTryAgain}
+              disabled={nextLoading}
               className="interactive-button inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-secondary"
             >
               <RotateCcw className="h-4 w-4" /> Try Again for Full Marks
@@ -382,9 +518,11 @@ function FeedbackPanel({
             <button
               type="button"
               onClick={onNext}
+              disabled={nextLoading}
               className="interactive-button inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-glow hover:bg-primary/90"
             >
-              Next question
+              {nextLoading && <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />}
+              {nextLoading ? "Loading…" : "Next question"}
             </button>
           </div>
         </div>
@@ -561,7 +699,7 @@ function FeedbackPanel({
             <div className="flex items-center justify-between gap-3">
               <h3 className="font-semibold">AI examiner result</h3>
               <span className="animate-pop rounded-full bg-primary px-3 py-1 text-xs font-bold text-primary-foreground">
-                {aiResult.score}/{aiResult.totalMarks ?? aiResult.total}
+                {aiResult.score}/{aiResult.totalMarks}
               </span>
             </div>
             <div className="mt-3 inline-flex rotate-[-2deg] rounded-md border-2 border-primary/60 px-3 py-1 text-xs font-black uppercase tracking-wide text-primary">

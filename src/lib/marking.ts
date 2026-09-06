@@ -1,4 +1,5 @@
 import type { MarkPoint, Question } from "../data/questionBank";
+import { normaliseMathAnswer } from "./mathAnswer";
 
 export type MarkResult = {
   awarded: { point: string; matchedKeyword: string }[];
@@ -8,7 +9,7 @@ export type MarkResult = {
 };
 
 function normalise(text: string) {
-  return text
+  return normaliseMathAnswer(text)
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")

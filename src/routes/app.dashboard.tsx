@@ -23,6 +23,16 @@ import { buildStudyPlan, missedKeywords } from "../lib/examTraining";
 import { formatClassroomDate, getUpcomingAssignment, useClassroomHub } from "../lib/classroomHub";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
+import { canUseQuestion } from "../lib/userSyllabus";
+import { markAnswer } from "../lib/marking";
+import {
+  readPracticeSession,
+  savePracticeQuestionState,
+  startPracticeSession,
+  subscribePracticeSession,
+  type PracticeMode,
+  type PracticeSession,
+} from "../lib/practiceSession";
 
 export const Route = createFileRoute("/app/dashboard")({
   component: Dashboard,
@@ -52,8 +62,6 @@ type RecentActivityItem = {
   timeAgo: string;
   accuracy?: number;
 };
-
-
 
 const MOCK_RECENT_ACTIVITY: RecentActivityItem[] = [
   {
@@ -90,6 +98,17 @@ function Dashboard() {
   const { attempts } = useAttempts();
   const { flashcards } = useFlashcards();
   const { classrooms, assignments } = useClassroomHub();
+  const [practiceSession, setPracticeSession] = useState<PracticeSession | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setPracticeSession(null);
+      return;
+    }
+    const refresh = () => setPracticeSession(readPracticeSession(user.id));
+    refresh();
+    return subscribePracticeSession(user.id, refresh);
+  }, [user?.id]);
 
   if (!user) return null;
 
@@ -174,38 +193,98 @@ function Dashboard() {
       subject: quickSubjects[0]?.subject,
     })[0] ??
     null;
-  const lastAttempt = userAttempts.at(-1);
-  const continueStudy = lastAttempt
+  const savedQuestion = practiceSession ? getQuestion(practiceSession.currentQuestionId) : null;
+  const activeSession =
+    practiceSession?.userId === user.id && savedQuestion && canUseQuestion(user, savedQuestion)
+      ? practiceSession
+      : null;
+  const lastAttempt = [...attempts].reverse().find((attempt) => {
+    const question = getQuestion(attempt.questionId);
+    return question && canUseQuestion(user, question);
+  });
+  const continueStudy = activeSession
     ? (() => {
-        const topicAttempts = userAttempts.filter(
-          (attempt) =>
-            attempt.subject === lastAttempt.subject && attempt.topic === lastAttempt.topic,
-        );
-        const topicTotalScore = topicAttempts.reduce((sum, attempt) => sum + attempt.score, 0);
-        const topicTotalMarks = topicAttempts.reduce((sum, attempt) => sum + attempt.total, 0);
-        const topicQuestionCount = filterQuestions({
-          qualification: user.qualification,
-          examBoard: user.examBoard,
-          subject: lastAttempt.subject,
-          topic: lastAttempt.topic,
-        }).length;
-        const completedQuestions = topicAttempts.length;
-
+        const answered = Object.values(activeSession.questionStates)
+          .map((state) => state.result ?? state.firstScore)
+          .filter((score): score is { score: number; total: number } => score !== null);
+        const totalScore = answered.reduce((sum, score) => sum + score.score, 0);
+        const totalMarks = answered.reduce((sum, score) => sum + score.total, 0);
         return {
-          subject: lastAttempt.subject,
-          subjectName: getSubjectName(user.examBoard, lastAttempt.subject),
-          examBoard: board?.name ?? user.examBoard,
-          topic: lastAttempt.topic,
-          topicName: getTopicMeta(lastAttempt.subject, lastAttempt.topic).name,
-          completedQuestions,
-          totalQuestions: topicQuestionCount || Math.max(100, completedQuestions),
-          accuracy: topicTotalMarks > 0 ? Math.round((topicTotalScore / topicTotalMarks) * 100) : 0,
-          completion: topicQuestionCount
-            ? Math.min(100, Math.round((completedQuestions / topicQuestionCount) * 100))
-            : Math.min(100, completedQuestions),
+          subject: activeSession.subject,
+          subjectName: getSubjectName(activeSession.examBoard, activeSession.subject),
+          examBoard: getExamBoard(activeSession.examBoard)?.name ?? activeSession.examBoard,
+          examBoardId: activeSession.examBoard,
+          qualification: activeSession.qualification,
+          topic: activeSession.topic,
+          topicName: getTopicMeta(activeSession.subject, activeSession.topic).name,
+          questionId: activeSession.currentQuestionId,
+          mode: activeSession.mode,
+          completedQuestions: answered.length,
+          totalQuestions: activeSession.questionIds.length,
+          accuracy: totalMarks > 0 ? Math.round((totalScore / totalMarks) * 100) : 0,
+          completion: Math.round((answered.length / activeSession.questionIds.length) * 100),
+          finished: activeSession.completedAt !== null,
+          onResume: undefined,
         };
       })()
-    : null;
+    : lastAttempt
+      ? (() => {
+          const lastQuestion = getQuestion(lastAttempt.questionId)!;
+          const topicAttempts = attempts.filter(
+            (attempt) =>
+              attempt.subject === lastAttempt.subject &&
+              attempt.topic === lastAttempt.topic &&
+              attempt.examBoard === lastAttempt.examBoard &&
+              attempt.qualification === lastAttempt.qualification,
+          );
+          const topicTotalScore = topicAttempts.reduce((sum, attempt) => sum + attempt.score, 0);
+          const topicTotalMarks = topicAttempts.reduce((sum, attempt) => sum + attempt.total, 0);
+          const topicQuestionCount = filterQuestions({
+            qualification: lastQuestion.qualification,
+            examBoard: lastQuestion.examBoard,
+            subject: lastAttempt.subject,
+            topic: lastAttempt.topic,
+          }).length;
+          const completedQuestions = topicAttempts.length;
+
+          return {
+            subject: lastAttempt.subject,
+            subjectName: getSubjectName(lastQuestion.examBoard, lastAttempt.subject),
+            examBoard: getExamBoard(lastQuestion.examBoard)?.name ?? lastQuestion.examBoard,
+            examBoardId: lastQuestion.examBoard,
+            qualification: lastQuestion.qualification,
+            topic: lastAttempt.topic,
+            topicName: getTopicMeta(lastAttempt.subject, lastAttempt.topic).name,
+            questionId: lastAttempt.questionId,
+            mode: "practice" as const,
+            completedQuestions,
+            totalQuestions: topicQuestionCount || Math.max(100, completedQuestions),
+            accuracy:
+              topicTotalMarks > 0 ? Math.round((topicTotalScore / topicTotalMarks) * 100) : 0,
+            completion: topicQuestionCount
+              ? Math.min(100, Math.round((completedQuestions / topicQuestionCount) * 100))
+              : Math.min(100, completedQuestions),
+            finished: false,
+            onResume: () => {
+              const pool = filterQuestions({
+                qualification: lastQuestion.qualification,
+                examBoard: lastQuestion.examBoard,
+                subject: lastQuestion.subject,
+                topic: lastQuestion.topic,
+              });
+              const session = startPracticeSession(user.id, pool, "practice", lastQuestion.id);
+              const result = markAnswer(lastQuestion, lastAttempt.answer);
+              savePracticeQuestionState(user.id, session.id, lastQuestion.id, {
+                answer: lastAttempt.answer,
+                hintsShown: 0,
+                elapsed: lastAttempt.elapsedSeconds ?? 0,
+                result: { ...result, score: lastAttempt.score, total: lastAttempt.total },
+                firstScore: { score: lastAttempt.score, total: lastAttempt.total },
+              });
+            },
+          };
+        })()
+      : null;
   const plan = buildStudyPlan(userAttempts);
   const missed = missedKeywords(userAttempts);
   const recentMistakes = userAttempts
@@ -980,12 +1059,18 @@ function ContinueStudyingCard({
     subject: string;
     subjectName: string;
     examBoard: string;
+    examBoardId: string;
+    qualification: string;
     topic: string;
     topicName: string;
+    questionId: string;
+    mode: PracticeMode;
     completedQuestions: number;
     totalQuestions: number;
     accuracy: number;
     completion: number;
+    finished: boolean;
+    onResume?: () => void;
   };
 }) {
   return (
@@ -994,7 +1079,7 @@ function ContinueStudyingCard({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
-              Continue Studying
+              {data?.finished ? "Practice complete" : "Continue Studying"}
             </span>
             {data ? (
               <span className="text-xs font-medium text-muted-foreground">{data.examBoard}</span>
@@ -1018,10 +1103,21 @@ function ContinueStudyingCard({
           )}
         </div>
 
-        {data ? (
+        {data?.finished ? (
           <Link
             to="/app/practice/$subject/$topic"
             params={{ subject: data.subject, topic: data.topic }}
+            search={{ examBoard: data.examBoardId, qualification: data.qualification }}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-glow hover:bg-primary/90"
+          >
+            Practice again <ArrowRight className="h-4 w-4" />
+          </Link>
+        ) : data ? (
+          <Link
+            to="/app/question/$id"
+            params={{ id: data.questionId }}
+            search={{ mode: data.mode }}
+            onClick={data.onResume}
             className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-glow hover:bg-primary/90"
           >
             Resume <ArrowRight className="h-4 w-4" />

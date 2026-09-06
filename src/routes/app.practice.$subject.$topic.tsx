@@ -7,6 +7,7 @@ import { getTopicMeta } from "../lib/questions";
 import { useAuth } from "../lib/auth";
 import { getExamBoard, getSubjectName, getSyllabusCode } from "../data/syllabusConfig";
 import { findUserSubjectSyllabus } from "../lib/userSyllabus";
+import { startPracticeSession } from "../lib/practiceSession";
 
 const practiceSearch = z.object({
   examBoard: z.string().optional(),
@@ -77,8 +78,12 @@ function PracticeSetup() {
 
   const start = () => {
     const pool = filtered.length > 0 ? filtered : all;
-    const pick = pool[Math.floor(Math.random() * pool.length)];
-    navigate({ to: "/app/question/$id", params: { id: pick.id }, search: { mode } });
+    const session = startPracticeSession(user.id, pool, mode);
+    navigate({
+      to: "/app/question/$id",
+      params: { id: session.currentQuestionId },
+      search: { mode: session.mode },
+    });
   };
 
   const board = getExamBoard(activeExamBoard);
@@ -122,9 +127,24 @@ function PracticeSetup() {
 
       <Section title="Mode">
         <div className="grid gap-3 md:grid-cols-3">
-          <ModeCard active={mode === "practice"} onClick={() => setMode("practice")} title="Practice" body="Hints + feedback after every answer." />
-          <ModeCard active={mode === "exam"} onClick={() => setMode("exam")} title="Exam" body="Timed. Feedback only at the end." />
-          <ModeCard active={mode === "hint"} onClick={() => setMode("hint")} title="Hint" body="Reveal layered hints before submitting." />
+          <ModeCard
+            active={mode === "practice"}
+            onClick={() => setMode("practice")}
+            title="Practice"
+            body="Hints + feedback after every answer."
+          />
+          <ModeCard
+            active={mode === "exam"}
+            onClick={() => setMode("exam")}
+            title="Exam"
+            body="Timed. Feedback only at the end."
+          />
+          <ModeCard
+            active={mode === "hint"}
+            onClick={() => setMode("hint")}
+            title="Hint"
+            body="Reveal layered hints before submitting."
+          />
         </div>
       </Section>
 
@@ -152,7 +172,15 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function ChoiceRow<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { v: T; l: string }[] }) {
+function ChoiceRow<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { v: T; l: string }[];
+}) {
   return (
     <div className="flex flex-wrap gap-2">
       {options.map((o) => {
@@ -176,7 +204,17 @@ function ChoiceRow<T extends string>({ value, onChange, options }: { value: T; o
   );
 }
 
-function ModeCard({ active, onClick, title, body }: { active: boolean; onClick: () => void; title: string; body: string }) {
+function ModeCard({
+  active,
+  onClick,
+  title,
+  body,
+}: {
+  active: boolean;
+  onClick: () => void;
+  title: string;
+  body: string;
+}) {
   return (
     <button
       type="button"
