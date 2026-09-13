@@ -14,7 +14,11 @@ export const Route = createFileRoute("/app/subjects")({
 
 const ALL_SUBJECT_OPTIONS = EXAM_BOARDS.flatMap((board) =>
   board.subjects.map((subject) => ({
-    key: selectionKey({ subject: subject.id, examBoard: board.id, qualification: board.qualification }),
+    key: selectionKey({
+      subject: subject.id,
+      examBoard: board.id,
+      qualification: board.qualification,
+    }),
     id: subject.id,
     name: subject.name,
     blurb: subject.blurb,
@@ -53,7 +57,10 @@ function SubjectsPage() {
     }));
     const next = studying.has(option.key)
       ? current.filter((selection) => selectionKey(selection) !== option.key)
-      : [...current, { subject: option.id, examBoard: option.examBoard, qualification: option.qualification }];
+      : [
+          ...current,
+          { subject: option.id, examBoard: option.examBoard, qualification: option.qualification },
+        ];
     saveSelections(next);
     setSaving(null);
   };
@@ -61,9 +68,10 @@ function SubjectsPage() {
   return (
     <div className="animate-enter space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Your subjects</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Your STEM subjects</h1>
         <p className="mt-1 text-muted-foreground">
-          Select subjects from any syllabus. Each card opens only the questions for that exact board.
+          Select maths, sciences, and computer science from your syllabus. Each card opens only the
+          questions for that exact board.
         </p>
       </div>
 
@@ -88,20 +96,34 @@ function SubjectsPage() {
         {visibleSubjectOptions.map((s) => {
           const isStudying = studying.has(s.key);
           const syllabusCode = getSyllabusCode(s.examBoard, s.id);
-          const hasQuestions = subjectHasQuestions(s.examBoard, s.id, s.qualification, syllabusCode);
-          const query = new URLSearchParams({ examBoard: s.examBoard, qualification: s.qualification });
+          const hasQuestions = subjectHasQuestions(
+            s.examBoard,
+            s.id,
+            s.qualification,
+            syllabusCode,
+          );
+          const query = new URLSearchParams({
+            examBoard: s.examBoard,
+            qualification: s.qualification,
+          });
 
           return (
             <SubjectCard
               key={s.key}
               id={s.id}
               name={s.name}
-              blurb={s.qualification + " · " + s.boardName + (syllabusCode ? " · " + syllabusCode : "")}
+              blurb={
+                s.qualification + " · " + s.boardName + (syllabusCode ? " · " + syllabusCode : "")
+              }
               isStudying={isStudying}
               hasQuestions={hasQuestions}
               onToggleStudying={() => toggleStudying(s)}
               toggleLabel={saving === s.key ? "Saving..." : undefined}
-              topicsHref={isStudying && hasQuestions ? "/app/topics/" + s.id + "?" + query.toString() : undefined}
+              topicsHref={
+                isStudying && hasQuestions
+                  ? "/app/topics/" + s.id + "?" + query.toString()
+                  : undefined
+              }
             />
           );
         })}
@@ -113,7 +135,10 @@ function SubjectsPage() {
           <p className="mt-3 text-sm text-muted-foreground">
             Select at least one subject above to start practising.
           </p>
-          <Link to="/app/profile" className="mt-2 inline-block text-sm font-medium text-primary hover:underline">
+          <Link
+            to="/app/profile"
+            className="mt-2 inline-block text-sm font-medium text-primary hover:underline"
+          >
             Or update subjects in your profile
           </Link>
         </div>

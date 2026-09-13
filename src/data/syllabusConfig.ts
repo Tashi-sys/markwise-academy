@@ -20,6 +20,22 @@ export type ExamBoard = {
   subjects: SyllabusSubject[];
 };
 
+export const STEM_SUBJECT_IDS = new Set([
+  "biology",
+  "chemistry",
+  "physics",
+  "mathematics",
+  "mathematics-a",
+  "further-pure-mathematics",
+  "additional-mathematics",
+  "further-mathematics",
+  "computer-science",
+]);
+
+export function isStemSubject(subjectId: string): boolean {
+  return STEM_SUBJECT_IDS.has(subjectId);
+}
+
 const SUBJECT_BLURBS: Record<string, string> = {
   biology: "Practise explanation, description, and practical questions.",
   chemistry: "Improve calculation, bonding, and practical answers.",
@@ -55,14 +71,7 @@ export const EXAM_BOARDS: ExamBoard[] = [
       subject("physics", "Physics"),
       subject("mathematics-a", "Mathematics A"),
       subject("further-pure-mathematics", "Further Pure Mathematics"),
-      subject("english-literature", "English Literature"),
-      subject("business", "Business"),
-      subject("economics", "Economics"),
-      subject("geography", "Geography"),
       subject("computer-science", "Computer Science"),
-      subject("history", "History"),
-      subject("french", "French"),
-      subject("spanish", "Spanish"),
     ],
   },
   {
@@ -75,13 +84,7 @@ export const EXAM_BOARDS: ExamBoard[] = [
       subject("physics", "Physics"),
       subject("mathematics", "Mathematics"),
       subject("additional-mathematics", "Additional Mathematics"),
-      subject("english-literature", "English Literature"),
-      subject("business-studies", "Business Studies"),
-      subject("economics", "Economics"),
-      subject("geography", "Geography"),
-      subject("history", "History"),
       subject("computer-science", "Computer Science"),
-      subject("japanese", "Japanese"),
     ],
   },
   {
@@ -93,10 +96,7 @@ export const EXAM_BOARDS: ExamBoard[] = [
       subject("chemistry", "Chemistry"),
       subject("physics", "Physics"),
       subject("mathematics", "Mathematics"),
-      subject("english-literature", "English Literature"),
       subject("computer-science", "Computer Science"),
-      subject("economics", "Economics"),
-      subject("geography", "Geography"),
     ],
   },
   {
@@ -109,13 +109,7 @@ export const EXAM_BOARDS: ExamBoard[] = [
       subject("physics", "Physics"),
       subject("mathematics", "Mathematics"),
       subject("further-mathematics", "Further Mathematics"),
-      subject("english-literature", "English Literature"),
-      subject("geography", "Geography"),
-      subject("history", "History"),
       subject("computer-science", "Computer Science"),
-      subject("business", "Business"),
-      subject("economics", "Economics"),
-      subject("psychology", "Psychology"),
     ],
   },
   {
@@ -127,13 +121,7 @@ export const EXAM_BOARDS: ExamBoard[] = [
       subject("chemistry", "Chemistry"),
       subject("physics", "Physics"),
       subject("mathematics", "Mathematics"),
-      subject("english-literature", "English Literature"),
       subject("computer-science", "Computer Science"),
-      subject("business", "Business"),
-      subject("economics", "Economics"),
-      subject("geography", "Geography"),
-      subject("history", "History"),
-      subject("psychology", "Psychology"),
     ],
   },
 ];

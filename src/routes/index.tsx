@@ -18,16 +18,16 @@ import { useAuth } from "../lib/auth";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "MarkWise — Train with past papers. Improve with markscheme feedback." },
+      { title: "MarkWise — GCSE & IGCSE STEM Exam Trainer" },
       {
         name: "description",
         content:
-          "Practise IGCSE exam questions, get instant marking, and learn how to turn your answers into full-mark responses.",
+          "Practise GCSE and IGCSE maths, sciences, and computer science with instant marking and markscheme feedback.",
       },
-      { property: "og:title", content: "MarkWise — IGCSE Past Paper Trainer" },
+      { property: "og:title", content: "MarkWise — GCSE & IGCSE STEM Exam Trainer" },
       {
         property: "og:description",
-        content: "Train with past papers. Get instant markscheme feedback. Gain marks.",
+        content: "Build your STEM exam skills with maths, sciences, and computer science practice.",
       },
     ],
   }),
@@ -97,14 +97,14 @@ function Index() {
           <div className="animate-enter">
             <div className="glass-card inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground shadow-soft">
               <Sparkles className="h-3.5 w-3.5 text-primary" />
-              Markscheme-trained feedback for IGCSE
+              GCSE & IGCSE STEM exam practice
             </div>
             <h1 className="mt-6 text-4xl font-extrabold leading-[1.05] text-foreground md:text-6xl">
-              Train with past papers. Improve with markscheme feedback.
+              Build your STEM skills. Turn practice into marks.
             </h1>
             <p className="animate-enter-delay-1 mt-6 max-w-xl text-lg text-muted-foreground">
-              Practise IGCSE exam questions, get instant marking, and learn exactly how to turn your
-              answers into full-mark responses.
+              Practise maths, biology, chemistry, physics, and computer science — including further
+              and additional maths. Get instant marking and learn how to improve every answer.
             </p>
             <div className="animate-enter-delay-2 mt-8 flex flex-wrap gap-3">
               <Link
@@ -179,7 +179,7 @@ function Index() {
       {/* Subjects strip — driven by syllabus config, not hardcoded */}
       <section id="subjects" data-reveal className="scroll-reveal mx-auto max-w-6xl px-6 py-20">
         <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-          Built for GCSE &amp; IGCSE syllabuses
+          Focused on GCSE &amp; IGCSE STEM
         </h2>
         <p className="mt-3 max-w-2xl text-muted-foreground">
           Pick your exam board at signup — Edexcel, Cambridge, OxfordAQA, AQA, or OCR. Only see
@@ -195,8 +195,11 @@ function Index() {
               >
                 <div className="text-sm font-semibold">{board.name}</div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {board.qualification} · {board.subjects.length} subjects
+                  {board.qualification} · {board.subjects.length} STEM subjects
                 </div>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  {board.subjects.map((subject) => subject.name).join(" · ")}
+                </p>
                 <div className="mt-3 text-xs text-primary">
                   {withQuestions.length > 0
                     ? `${withQuestions.length} subject${withQuestions.length === 1 ? "" : "s"} with questions`
@@ -220,8 +223,8 @@ function Index() {
         data-reveal
         className="scroll-reveal border-t border-border/60 py-10 text-center text-xs text-muted-foreground"
       >
-        © {new Date().getFullYear()} MarkWise · Built for GCSE &amp; IGCSE students who want to gain
-        marks.
+        © {new Date().getFullYear()} MarkWise · Built for GCSE &amp; IGCSE STEM students who want to
+        gain marks.
       </footer>
     </div>
   );
@@ -230,7 +233,9 @@ function Index() {
 function useLandingRefreshReset() {
   useEffect(() => {
     if (typeof window === "undefined" || !window.location.hash) return;
-    const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    const navigation = performance.getEntriesByType("navigation")[0] as
+      | PerformanceNavigationTiming
+      | undefined;
     if (navigation?.type !== "reload") return;
     window.history.replaceState(null, "", window.location.pathname + window.location.search);
     window.scrollTo(0, 0);

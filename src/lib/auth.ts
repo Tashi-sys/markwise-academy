@@ -1,3 +1,4 @@
+import { getSubjectsForBoard, isStemSubject } from "../data/syllabusConfig";
 import { useCallback, useEffect, useState } from "react";
 import { doc, setDoc } from "firebase/firestore";
 import type { ExamBoardId, Qualification } from "../data/syllabusConfig";
@@ -57,9 +58,14 @@ const ALLOWED_EMAIL_TLDS = new Set([
 
 export function validateEmailAddress(value: string) {
   const email = value.trim().toLowerCase();
-  const basic = new RegExp("^[a-z0-9.!#$%&'*+/=?^_{|}~-]+@[a-z0-9-]+(?:\\.[a-z0-9-]+)+$").test(email);
+  const basic = new RegExp("^[a-z0-9.!#$%&'*+/=?^_{|}~-]+@[a-z0-9-]+(?:\\.[a-z0-9-]+)+$").test(
+    email,
+  );
   if (!basic) {
-    return { ok: false, error: "Enter a real email address, like name@gmail.com or name@school.edu." };
+    return {
+      ok: false,
+      error: "Enter a real email address, like name@gmail.com or name@school.edu.",
+    };
   }
 
   const [, domain = ""] = email.split("@");
@@ -72,13 +78,13 @@ export function validateEmailAddress(value: string) {
   if (!hasAllowedProvider && !hasAllowedTld) {
     return {
       ok: false,
-      error: "Use a recognised email provider or school email ending, like Gmail, iCloud, Outlook, .com, or .edu.",
+      error:
+        "Use a recognised email provider or school email ending, like Gmail, iCloud, Outlook, .com, or .edu.",
     };
   }
 
   return { ok: true, email };
 }
-
 
 export function userProfileDocumentId(user: Pick<UserProfile, "id" | "name">) {
   const slug = user.name
@@ -121,11 +127,13 @@ async function syncUserProfileToFirebase(user: UserProfile) {
     );
   } catch (error) {
     if (import.meta.env.DEV) {
-      console.warn("MarkWise user profile Firebase save failed. Using localStorage fallback.", error);
+      console.warn(
+        "MarkWise user profile Firebase save failed. Using localStorage fallback.",
+        error,
+      );
     }
   }
 }
-
 
 function readUsers(): StoredUser[] {
   if (typeof window === "undefined") return [];
@@ -156,14 +164,22 @@ function writeSessionId(id: string | null) {
 }
 
 function normaliseUser(user: StoredUser): StoredUser {
-  if (user.subjectSyllabuses?.length) return user;
+  const selections = user.subjectSyllabuses?.length
+    ? user.subjectSyllabuses
+    : user.selectedSubjects.map((subject) => ({
+        subject,
+        examBoard: user.examBoard,
+        qualification: user.qualification,
+      }));
+  const subjectSyllabuses = selections.filter((selection) =>
+    getSubjectsForBoard(selection.examBoard).some((subject) => subject.id === selection.subject),
+  );
   return {
     ...user,
-    subjectSyllabuses: user.selectedSubjects.map((subject) => ({
-      subject,
-      examBoard: user.examBoard,
-      qualification: user.qualification,
-    })),
+    subjectSyllabuses,
+    selectedSubjects: [...new Set(subjectSyllabuses.map((selection) => selection.subject))],
+    weakestSubject:
+      user.weakestSubject && isStemSubject(user.weakestSubject) ? user.weakestSubject : undefined,
   };
 }
 
@@ -218,14 +234,13 @@ export function signup(input: SignupInput): AuthResult {
     qualification: input.qualification,
     examBoard: input.examBoard,
     selectedSubjects: input.selectedSubjects,
-    subjectSyllabuses:
-      input.subjectSyllabuses?.length
-        ? input.subjectSyllabuses
-        : input.selectedSubjects.map((subject) => ({
-            subject,
-            examBoard: input.examBoard,
-            qualification: input.qualification,
-          })),
+    subjectSyllabuses: input.subjectSyllabuses?.length
+      ? input.subjectSyllabuses
+      : input.selectedSubjects.map((subject) => ({
+          subject,
+          examBoard: input.examBoard,
+          qualification: input.qualification,
+        })),
     targetGrade: input.targetGrade,
     weakestSubject: input.weakestSubject,
     preferredPracticeMode: input.preferredPracticeMode,
@@ -259,7 +274,12 @@ export function updateUserProfile(
   updates: Partial<
     Pick<
       UserProfile,
-      "selectedSubjects" | "subjectSyllabuses" | "name" | "targetGrade" | "weakestSubject" | "preferredPracticeMode"
+      | "selectedSubjects"
+      | "subjectSyllabuses"
+      | "name"
+      | "targetGrade"
+      | "weakestSubject"
+      | "preferredPracticeMode"
     >
   >,
 ): AuthResult {
@@ -315,7 +335,12 @@ export type AuthProvider = {
     updates: Partial<
       Pick<
         UserProfile,
-        "selectedSubjects" | "subjectSyllabuses" | "name" | "targetGrade" | "weakestSubject" | "preferredPracticeMode"
+        | "selectedSubjects"
+        | "subjectSyllabuses"
+        | "name"
+        | "targetGrade"
+        | "weakestSubject"
+        | "preferredPracticeMode"
       >
     >,
   ) => Promise<AuthResult>;

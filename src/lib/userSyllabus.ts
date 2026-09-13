@@ -27,15 +27,21 @@ export function getUserSubjectSyllabuses(user: UserProfile): UserSubjectSyllabus
           qualification: user.qualification,
         }));
 
-  return raw.map((selection) => {
-    const board = getExamBoard(selection.examBoard);
-    return {
-      ...selection,
-      key: selectionKey(selection),
-      subjectName: getSubjectName(selection.examBoard, selection.subject),
-      boardName: board?.name ?? selection.examBoard,
-    };
-  });
+  return raw
+    .filter((selection) =>
+      getExamBoard(selection.examBoard)?.subjects.some(
+        (subject) => subject.id === selection.subject,
+      ),
+    )
+    .map((selection) => {
+      const board = getExamBoard(selection.examBoard);
+      return {
+        ...selection,
+        key: selectionKey(selection),
+        subjectName: getSubjectName(selection.examBoard, selection.subject),
+        boardName: board?.name ?? selection.examBoard,
+      };
+    });
 }
 
 export function getSyllabusSummary(user: UserProfile) {
@@ -54,7 +60,9 @@ export function findUserSubjectSyllabus(
   examBoard?: string,
   qualification?: string,
 ) {
-  const selections = getUserSubjectSyllabuses(user).filter((selection) => selection.subject === subject);
+  const selections = getUserSubjectSyllabuses(user).filter(
+    (selection) => selection.subject === subject,
+  );
   return (
     selections.find(
       (selection) =>
@@ -66,7 +74,10 @@ export function findUserSubjectSyllabus(
   );
 }
 
-export function canUseQuestion(user: UserProfile, question: Pick<Question, "subject" | "examBoard" | "qualification">) {
+export function canUseQuestion(
+  user: UserProfile,
+  question: Pick<Question, "subject" | "examBoard" | "qualification">,
+) {
   return getUserSubjectSyllabuses(user).some(
     (selection) =>
       selection.subject === question.subject &&

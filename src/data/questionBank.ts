@@ -1,5 +1,5 @@
 import type { ExamBoardId, Qualification } from "./syllabusConfig";
-import { getSyllabusCode } from "./syllabusConfig";
+import { getSyllabusCode, isStemSubject } from "./syllabusConfig";
 import { ALL_SUBJECT_TOPIC_PACK_QUESTIONS } from "./allSubjectTopicPacks";
 import { AQA_BIOLOGY_QUESTIONS } from "./aqaBiologyQuestions";
 import { AQA_CHEMISTRY_QUESTIONS } from "./aqaChemistryQuestions";
@@ -67,7 +67,7 @@ const BLOCK_GENERIC_FILLER_SUBJECTS = new Set([
  * Licensed past-paper entries are loaded first. Original Biology exam-style seed
  * questions keep the competition demo usable without copying copyrighted papers.
  */
-export const QUESTION_BANK: Question[] = [
+const ALL_QUESTIONS: Question[] = [
   ...PROVIDED_QUESTIONS,
   ...ENGLISH_LITERATURE_QUESTIONS,
   ...PAST_PAPER_QUESTIONS.filter((q) => !isProvidedQuestionCombo(q)),
@@ -130,6 +130,10 @@ export const QUESTION_BANK: Question[] = [
       q.examBoard !== "ocr-gcse",
   ),
 ];
+
+export const QUESTION_BANK: Question[] = ALL_QUESTIONS.filter((question) =>
+  isStemSubject(question.subject),
+);
 
 export type QuestionFilter = {
   qualification?: Qualification;
