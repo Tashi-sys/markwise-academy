@@ -57,7 +57,9 @@ const ALLOWED_EMAIL_TLDS = new Set([
   "io",
 ]);
 
-export function validateEmailAddress(value: string): { ok: true } | { ok: false; error: string } {
+export function validateEmailAddress(
+  value: string,
+): { ok: true; email: string } | { ok: false; error: string } {
   const email = value.trim().toLowerCase();
   const basic = new RegExp("^[a-z0-9.!#$%&'*+/=?^_{|}~-]+@[a-z0-9-]+(?:\\.[a-z0-9-]+)+$").test(
     email,
