@@ -112,7 +112,10 @@ function buildProgress(user: UserProfile, attempts: JsonRecord[], flashcards: un
   const xp = totalScore * 20 + attempts.length * 10 + streak * 15;
   const level = Math.max(1, Math.floor(xp / 250) + 1);
 
-  const topicStats = new Map<string, { subject: string; topic: string; score: number; total: number; attempted: number }>();
+  const topicStats = new Map<
+    string,
+    { subject: string; topic: string; score: number; total: number; attempted: number }
+  >();
   for (const attempt of attempts) {
     const subject = String(attempt.subject ?? "unknown");
     const topic = String(attempt.topic ?? "unknown");
@@ -147,7 +150,11 @@ function buildProgress(user: UserProfile, attempts: JsonRecord[], flashcards: un
 
   const badges = [
     { id: "first-attempt", label: "First Attempt", earned: attempts.length >= 1 },
-    { id: "full-marks", label: "Full Marks", earned: attempts.some((a) => Number(a.score) === Number(a.total) && Number(a.total) > 0) },
+    {
+      id: "full-marks",
+      label: "Full Marks",
+      earned: attempts.some((a) => Number(a.score) === Number(a.total) && Number(a.total) > 0),
+    },
     { id: "flashcard-builder", label: "Flashcard Builder", earned: flashcards.length >= 10 },
     { id: "streak-starter", label: "Streak Starter", earned: streak >= 2 },
     { id: "week-streak", label: "7 Day Streak", earned: streak >= 7 },
@@ -210,10 +217,22 @@ export async function syncUserAccountDataToFirebase(user: UserProfile) {
   if (typeof window === "undefined") return;
 
   const keys = storageKeys(user.id);
-  const attempts = readJson<JsonRecord[]>(keys.attempts, []).filter((attempt) => attempt.userId === user.id);
-  const flashcards = readJson<JsonRecord[]>(keys.flashcards, []).filter((card) => card.userId === user.id);
+  const attempts = readJson<JsonRecord[]>(keys.attempts, []).filter(
+    (attempt) => attempt.userId === user.id,
+  );
+  const flashcards = readJson<JsonRecord[]>(keys.flashcards, []).filter(
+    (card) => card.userId === user.id,
+  );
   const notebooks = getScopedNotebooks(user.id);
   const aiChats = readJson<unknown[]>(keys.aiChats, []);
+  const scopedAIChats =
+    typeof window === "undefined"
+      ? {}
+      : Object.fromEntries(
+          Object.keys(window.localStorage)
+            .filter((key) => key.startsWith(`markwise:ai-tutor-chats:v2:${user.id}:`))
+            .map((key) => [key, readJson<unknown[]>(key, [])]),
+        );
   const classroom = getScopedClassroomState(user.id);
   const mistakes = buildMistakes(attempts);
   const progress = buildProgress(user, attempts, flashcards);
@@ -238,17 +257,48 @@ export async function syncUserAccountDataToFirebase(user: UserProfile) {
     );
 
     await Promise.all([
-      setDoc(doc(db, "users", userDocId, "appData", "notebooks"), cleanForFirestore({ userId: user.id, notebooks, updatedAt: now }), { merge: true }),
-      setDoc(doc(db, "users", userDocId, "appData", "aiChats"), cleanForFirestore({ userId: user.id, aiChats, updatedAt: now }), { merge: true }),
-      setDoc(doc(db, "users", userDocId, "appData", "flashcards"), cleanForFirestore({ userId: user.id, flashcards, updatedAt: now }), { merge: true }),
-      setDoc(doc(db, "users", userDocId, "appData", "mistakes"), cleanForFirestore({ userId: user.id, mistakes, updatedAt: now }), { merge: true }),
-      setDoc(doc(db, "users", userDocId, "appData", "classes"), cleanForFirestore({ userId: user.id, ...classroom, updatedAt: now }), { merge: true }),
-      setDoc(doc(db, "users", userDocId, "appData", "attempts"), cleanForFirestore({ userId: user.id, attempts, updatedAt: now }), { merge: true }),
-      setDoc(doc(db, "users", userDocId, "appData", "progress"), cleanForFirestore({ userId: user.id, ...progress, updatedAt: now }), { merge: true }),
+      setDoc(
+        doc(db, "users", userDocId, "appData", "notebooks"),
+        cleanForFirestore({ userId: user.id, notebooks, updatedAt: now }),
+        { merge: true },
+      ),
+      setDoc(
+        doc(db, "users", userDocId, "appData", "aiChats"),
+        cleanForFirestore({ userId: user.id, aiChats, scopedAIChats, updatedAt: now }),
+        { merge: true },
+      ),
+      setDoc(
+        doc(db, "users", userDocId, "appData", "flashcards"),
+        cleanForFirestore({ userId: user.id, flashcards, updatedAt: now }),
+        { merge: true },
+      ),
+      setDoc(
+        doc(db, "users", userDocId, "appData", "mistakes"),
+        cleanForFirestore({ userId: user.id, mistakes, updatedAt: now }),
+        { merge: true },
+      ),
+      setDoc(
+        doc(db, "users", userDocId, "appData", "classes"),
+        cleanForFirestore({ userId: user.id, ...classroom, updatedAt: now }),
+        { merge: true },
+      ),
+      setDoc(
+        doc(db, "users", userDocId, "appData", "attempts"),
+        cleanForFirestore({ userId: user.id, attempts, updatedAt: now }),
+        { merge: true },
+      ),
+      setDoc(
+        doc(db, "users", userDocId, "appData", "progress"),
+        cleanForFirestore({ userId: user.id, ...progress, updatedAt: now }),
+        { merge: true },
+      ),
     ]);
   } catch (error) {
     if (import.meta.env.DEV) {
-      console.warn("MarkWise user account data Firebase sync failed. Using localStorage fallback.", error);
+      console.warn(
+        "MarkWise user account data Firebase sync failed. Using localStorage fallback.",
+        error,
+      );
     }
   }
 }

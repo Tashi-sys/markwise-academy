@@ -1,3 +1,10 @@
+import { SubjectToolPage } from "../components/subjects/SubjectToolPage";
+import {
+  subjectToolSearch,
+  type SubjectScope,
+  notebookMatchesScope,
+  scopeSearch,
+} from "../lib/subjectScope";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 import type { ReactNode } from "react";
@@ -21,7 +28,6 @@ import {
   type ExamBoardId,
   getExamBoard,
   getSubjectName,
-  getSubjectsForBoard,
 } from "../data/syllabusConfig";
 import { askStudyNotebook } from "../lib/api/study-notebook.functions";
 import { getCurrentUser, useAuth } from "../lib/auth";
@@ -30,7 +36,8 @@ import { recordFlashcards } from "../lib/storage";
 import { requestUserDataSync } from "../lib/userDataSync";
 
 export const Route = createFileRoute("/app/study-notebook")({
-  component: StudyNotebookPage,
+  validateSearch: (search) => subjectToolSearch.parse(search),
+  component: ScopedNotebook,
 });
 
 type SourceStatus = "Processing" | "Ready" | "Error";
@@ -58,6 +65,7 @@ type Notebook = {
   title: string;
   subject: string;
   examBoard: string;
+  qualification?: string;
   paper: string;
   topics: string[];
   sources: NotebookSource[];
@@ -148,7 +156,28 @@ const BIOLOGY_KEYWORDS = [
   "ecosystem",
 ];
 
-function StudyNotebookPage() {
+function ScopedNotebook() {
+  const search = Route.useSearch();
+  return (
+    <SubjectToolPage search={search}>
+      {(context, userId) => (
+        <StudyNotebookPage
+          key={`${userId}:${context.key}:${search.view ?? ""}`}
+          context={context}
+          view={search.view}
+        />
+      )}
+    </SubjectToolPage>
+  );
+}
+
+function StudyNotebookPage({
+  context,
+  view,
+}: {
+  context: SubjectScope;
+  view?: "notes" | "notebook";
+}) {
   const { user } = useAuth();
   const [notebooks, setNotebooks] = useState<Notebook[]>(() => readNotebooks());
   const [activeId, setActiveId] = useState(() => notebooks[0]?.id ?? "");
@@ -159,7 +188,9 @@ function StudyNotebookPage() {
   const [selectedSourceId, setSelectedSourceId] = useState("all");
   const [selectedSourceOnly, setSelectedSourceOnly] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState("");
-  const [requestedOutputType, setRequestedOutputType] = useState<NotebookOutputType>("summary");
+  const [requestedOutputType, setRequestedOutputType] = useState<NotebookOutputType>(
+    view === "notes" ? "notes" : "summary",
+  );
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [activePanel, setActivePanel] = useState<"summary" | "keywords" | "questions" | "mindmap">(
@@ -167,20 +198,20 @@ function StudyNotebookPage() {
   );
   const [generatedQuestions, setGeneratedQuestions] = useState<GeneratedQuestion[]>([]);
 
-  const activeNotebook = notebooks.find((notebook) => notebook.id === activeId) ?? notebooks[0];
+  const scopedNotebooks = notebooks.filter((notebook) => notebookMatchesScope(notebook, context));
+  const activeNotebook =
+    scopedNotebooks.find((notebook) => notebook.id === activeId) ?? scopedNotebooks[0];
   const allChunks = useMemo(
     () => activeNotebook?.sources.flatMap((source) => source.chunks) ?? [],
     [activeNotebook],
   );
   const keywordRows = useMemo(() => buildKeywordRows(allChunks), [allChunks]);
-  const userExamBoard = user?.examBoard ?? "edexcel-igcse";
-  const board = user ? getExamBoard(user.examBoard) : undefined;
-  const activeBoardId = resolveExamBoardId(activeNotebook?.examBoard, userExamBoard);
-  const activeSubjectName = getSubjectName(activeBoardId, activeNotebook?.subject ?? "biology");
+  const board = getExamBoard(context.examBoard);
+  const activeSubjectName = context.subjectName;
   const generationContext = useMemo<NotebookGenerationContext>(
     () => ({
       selectedSubject: activeSubjectName,
-      selectedExamBoard: activeNotebook?.examBoard ?? board?.name ?? userExamBoard,
+      selectedExamBoard: context.boardName,
       selectedTopic:
         selectedTopic.trim() ||
         activeNotebook?.topics[0] ||
@@ -188,14 +219,7 @@ function StudyNotebookPage() {
         "Source content",
       requestedOutputType,
     }),
-    [
-      activeNotebook,
-      activeSubjectName,
-      board?.name,
-      requestedOutputType,
-      selectedTopic,
-      userExamBoard,
-    ],
+    [activeNotebook, activeSubjectName, requestedOutputType, selectedTopic, context.boardName],
   );
   const summary = useMemo(
     () => buildSummary(allChunks, generationContext),
@@ -270,13 +294,15 @@ function StudyNotebookPage() {
   if (!user) return null;
 
   const createNotebook = () => {
-    const subject = user.selectedSubjects[0] ?? "biology";
+    if (!notebookSyncReady) return;
+    const subject = context.subject;
     const notebook: Notebook = {
       id: crypto.randomUUID(),
       title: UNTITLED_NOTEBOOK_TITLE,
       subject,
-      examBoard: board?.name ?? user.examBoard,
-      paper: "Paper 1",
+      examBoard: context.examBoard,
+      qualification: context.qualification,
+      paper: "All papers",
       topics: [],
       sources: [],
       chats: [],
@@ -314,7 +340,7 @@ function StudyNotebookPage() {
     const sources = [source, ...activeNotebook.sources];
     updateNotebook(activeNotebook.id, {
       title: shouldAutoNameNotebook(activeNotebook)
-        ? inferNotebookTitle(activeNotebook, sourceText, board?.name ?? user.examBoard)
+        ? `${context.subjectName} · ${context.syllabusCode}`
         : activeNotebook.title,
       sources,
       topics: [
@@ -343,6 +369,7 @@ function StudyNotebookPage() {
     setLoading(true);
     const response = await askStudyNotebook({
       data: {
+        subjectScope: scopeSearch(context),
         message: text,
         mode: "Ask Sources",
         notebook: {
@@ -423,7 +450,7 @@ function StudyNotebookPage() {
       const source = makeSource(file.name, ext.toUpperCase(), text);
       updateNotebook(activeNotebook.id, {
         title: shouldAutoNameNotebook(activeNotebook)
-          ? inferNotebookTitle(activeNotebook, text, board?.name ?? user.examBoard)
+          ? `${context.subjectName} · ${context.syllabusCode}`
           : activeNotebook.title,
         sources: [source, ...activeNotebook.sources],
         topics: [
@@ -446,7 +473,9 @@ function StudyNotebookPage() {
       <div className="animate-enter grid min-h-[60vh] place-items-center">
         <div className="max-w-lg rounded-3xl border border-border bg-card p-10 text-center shadow-soft">
           <BookOpen className="mx-auto h-10 w-10 text-primary" />
-          <h1 className="mt-4 text-3xl font-bold tracking-tight">Study Notebook</h1>
+          <h1 className="mt-4 text-3xl font-bold tracking-tight">
+            {view === "notes" ? "Revision Notes" : "Notebook"} · {context.subjectName}
+          </h1>
           <p className="mt-2 text-muted-foreground">
             Create source-grounded notebooks for notes, syllabus extracts, markschemes, and revision
             material.
@@ -454,9 +483,10 @@ function StudyNotebookPage() {
           <button
             type="button"
             onClick={createNotebook}
+            disabled={!notebookSyncReady}
             className="interactive-button mt-6 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-glow"
           >
-            Create your first notebook
+            {notebookSyncReady ? "Create your first notebook" : "Loading notebooks…"}
           </button>
         </div>
       </div>
@@ -473,13 +503,14 @@ function StudyNotebookPage() {
             <button
               type="button"
               onClick={createNotebook}
+              disabled={!notebookSyncReady}
               className="interactive-button grid h-9 w-9 place-items-center rounded-full bg-primary text-primary-foreground"
             >
               <Plus className="h-4 w-4" />
             </button>
           </div>
           <div className="stagger-grid mt-4 space-y-2">
-            {notebooks.map((notebook) => (
+            {scopedNotebooks.map((notebook) => (
               <button
                 key={notebook.id}
                 type="button"
@@ -513,8 +544,7 @@ function StudyNotebookPage() {
               <div>
                 <h1 className="text-3xl font-bold tracking-tight">{activeNotebook.title}</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {activeNotebook.examBoard} ·{" "}
-                  {getSubjectName(user.examBoard, activeNotebook.subject)} · {activeNotebook.paper}
+                  {context.boardName} · {context.subjectName} · {activeNotebook.paper}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Badge>{activeNotebook.sources.length} sources</Badge>
@@ -546,43 +576,18 @@ function StudyNotebookPage() {
               </div>
             </div>
             <div className="mt-5 grid gap-3 md:grid-cols-4">
-              <label className="text-xs font-semibold text-muted-foreground">
+              <div className="text-sm font-semibold text-muted-foreground">
                 Exam board
-                <select
-                  value={activeBoardId}
-                  onChange={(event) => {
-                    const nextBoard = getExamBoard(event.target.value as ExamBoardId);
-                    if (!nextBoard) return;
-                    updateNotebook(activeNotebook.id, {
-                      examBoard: nextBoard.name,
-                      subject: nextBoard.subjects[0]?.id ?? activeNotebook.subject,
-                    });
-                  }}
-                  className="mt-1 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground"
-                >
-                  {EXAM_BOARDS.map((examBoard) => (
-                    <option key={examBoard.id} value={examBoard.id}>
-                      {examBoard.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-xs font-semibold text-muted-foreground">
+                <p className="mt-1 rounded-xl border border-border bg-secondary/30 px-3 py-2 text-foreground">
+                  {context.boardName} {context.syllabusCode}
+                </p>
+              </div>
+              <div className="text-sm font-semibold text-muted-foreground">
                 Subject
-                <select
-                  value={activeNotebook.subject}
-                  onChange={(event) =>
-                    updateNotebook(activeNotebook.id, { subject: event.target.value })
-                  }
-                  className="mt-1 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground"
-                >
-                  {getSubjectsForBoard(activeBoardId).map((subject) => (
-                    <option key={subject.id} value={subject.id}>
-                      {subject.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <p className="mt-1 rounded-xl border border-border bg-secondary/30 px-3 py-2 text-foreground">
+                  {context.subjectName}
+                </p>
+              </div>
               <label className="text-xs font-semibold text-muted-foreground">
                 Topic
                 <input
@@ -2606,7 +2611,10 @@ async function loadNotebooksFromFirebase(userId: string) {
   }
 }
 
-function subscribeToFirebaseNotebooks(userId: string, onNotebooks: (notebooks: Notebook[]) => void) {
+function subscribeToFirebaseNotebooks(
+  userId: string,
+  onNotebooks: (notebooks: Notebook[]) => void,
+) {
   if (typeof window === "undefined") return () => {};
   return onSnapshot(
     doc(db, NOTEBOOKS_FIRESTORE_COLLECTION, userId),
@@ -2616,7 +2624,10 @@ function subscribeToFirebaseNotebooks(userId: string, onNotebooks: (notebooks: N
     },
     (error) => {
       if (import.meta.env.DEV) {
-        console.warn("MarkWise notebook Firebase subscription failed. Using localStorage fallback.", error);
+        console.warn(
+          "MarkWise notebook Firebase subscription failed. Using localStorage fallback.",
+          error,
+        );
       }
     },
   );

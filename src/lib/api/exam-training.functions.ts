@@ -1,3 +1,5 @@
+import { subjectScopeSchema } from "../subjectScope";
+import { getSubjectSyllabusGrounding } from "./subject-syllabus";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { callMarkWiseAI, jsonInstructions } from "./openai.server";
@@ -117,6 +119,7 @@ function fallbackAIMarking(data: {
 export const generatePracticeQuestion = createServerFn({ method: "POST" })
   .validator(
     z.object({
+      subjectScope: subjectScopeSchema.optional(),
       examBoard: z.string(),
       subject: z.string(),
       paper: z.string(),
@@ -129,6 +132,9 @@ export const generatePracticeQuestion = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     try {
+      const activeSyllabus = data.subjectScope
+        ? getSubjectSyllabusGrounding(data.subjectScope)
+        : undefined;
       return normaliseGeneratedQuestion(
         (await callMarkWiseAI({
           format: "json",
@@ -148,6 +154,7 @@ export const generatePracticeQuestion = createServerFn({ method: "POST" })
             endpoint: "/api/generate-question",
             task: "Generate an original past-paper-style question. Do not copy real past paper questions.",
             ...data,
+            activeSyllabus,
           },
         })) as GeneratedQuestionJson,
       );

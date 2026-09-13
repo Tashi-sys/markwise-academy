@@ -7,6 +7,7 @@ import { getTopicMeta } from "../lib/questions";
 import { useAuth } from "../lib/auth";
 import { getExamBoard, getSubjectName, getSyllabusCode } from "../data/syllabusConfig";
 import { findUserSubjectSyllabus } from "../lib/userSyllabus";
+import { resolveUserSubjectScope } from "../lib/subjectScope";
 import { startPracticeSession } from "../lib/practiceSession";
 
 const practiceSearch = z.object({
@@ -34,7 +35,10 @@ function PracticeSetup() {
 
   if (!user) return null;
 
-  const selection = findUserSubjectSyllabus(user, subject, search.examBoard, search.qualification);
+  const selection =
+    search.examBoard || search.qualification
+      ? resolveUserSubjectScope(user, { ...search, subject })
+      : findUserSubjectSyllabus(user, subject);
   if (!selection) throw notFound();
 
   const activeExamBoard = selection.examBoard;

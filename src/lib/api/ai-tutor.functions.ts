@@ -1,3 +1,5 @@
+import { subjectScopeSchema } from "../subjectScope";
+import { getSubjectSyllabusGrounding } from "./subject-syllabus";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import {
@@ -49,6 +51,7 @@ const questionContextSchema = z
 export const askAITutor = createServerFn({ method: "POST" })
   .validator(
     z.object({
+      subjectScope: subjectScopeSchema.optional(),
       mode: z.string(),
       message: z.string(),
       userMessage: z.string().optional(),
@@ -73,7 +76,11 @@ export const askAITutor = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     try {
+      const activeSyllabus = data.subjectScope
+        ? getSubjectSyllabusGrounding(data.subjectScope)
+        : undefined;
       const reply = await callTutor({
+        activeSyllabus,
         endpoint: "/api/ai-tutor",
         mode: data.mode,
         userMessage: data.userMessage ?? data.message,

@@ -9,7 +9,6 @@ import {
 import {
   LayoutDashboard,
   BookMarked,
-  ListChecks,
   LineChart,
   History,
   Menu,
@@ -18,12 +17,8 @@ import {
   User,
   KeyRound,
   Layers,
-  BookOpenCheck,
   AlertTriangle,
   FileText,
-  Sparkles,
-  Bot,
-  NotebookTabs,
   GraduationCap,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -64,16 +59,12 @@ const NAV_SECTIONS = [
     title: "Learning",
     items: [
       { to: "/app/subjects", label: "Subjects", icon: BookMarked, exact: false },
-      { to: "/app/ai-tutor", label: "AI Tutor", icon: Bot, exact: true },
-      { to: "/app/study-notebook", label: "Revision Notes", icon: NotebookTabs, exact: true },
       { to: "/app/keywords", label: "Keywords", icon: KeyRound, exact: true },
-      { to: "/app/model-answers", label: "Model Answers", icon: BookOpenCheck, exact: true },
     ],
   },
   {
     title: "Active Recall",
     items: [
-      { to: "/app/practice", label: "Practise", icon: ListChecks, exact: false },
       { to: "/app/flashcards", label: "Flashcards", icon: Layers, exact: true },
       { to: "/app/mini-paper", label: "Mini Paper", icon: FileText, exact: true },
       { to: "/app/review", label: "Review", icon: History, exact: false },
@@ -82,10 +73,7 @@ const NAV_SECTIONS = [
   },
   {
     title: "Tools",
-    items: [
-      { to: "/app/generate", label: "Generate", icon: Sparkles, exact: true },
-      { to: "/app/classroom", label: "Classroom", icon: GraduationCap, exact: false },
-    ],
+    items: [{ to: "/app/classroom", label: "Classroom", icon: GraduationCap, exact: false }],
   },
   {
     title: "Account",
@@ -93,10 +81,11 @@ const NAV_SECTIONS = [
   },
 ];
 
+const NAV = NAV_SECTIONS.flatMap((section) => section.items);
+
 const MOBILE_NAV = [
   { to: "/app/dashboard", label: "Home", icon: LayoutDashboard, exact: true },
-  { to: "/app/practice", label: "Practise", icon: ListChecks, exact: false },
-  { to: "/app/ai-tutor", label: "AI Tutor", icon: Bot, exact: true },
+  { to: "/app/subjects", label: "Subjects", icon: BookMarked, exact: false },
   { to: "/app/classroom", label: "Classroom", icon: GraduationCap, exact: false },
   { to: "/app/progress", label: "Progress", icon: LineChart, exact: false },
 ];
@@ -175,7 +164,20 @@ function AppLayout() {
                 </div>
                 <div className="space-y-1">
                   {section.items.map((item) => {
-                    const active = item.exact ? pathname === item.to : pathname.startsWith(item.to);
+                    const active =
+                      item.to === "/app/subjects"
+                        ? [
+                            "/app/subject",
+                            "/app/ai-tutor",
+                            "/app/study-notebook",
+                            "/app/model-answers",
+                            "/app/practice",
+                            "/app/topics",
+                            "/app/generate",
+                          ].some((path) => pathname.startsWith(path))
+                        : item.exact
+                          ? pathname === item.to
+                          : pathname.startsWith(item.to);
                     const Icon = item.icon;
                     return (
                       <Link
@@ -245,7 +247,20 @@ function AppLayout() {
           {mobileOpen && (
             <nav className="border-b border-border bg-card p-3 md:hidden">
               {NAV.map((item) => {
-                const active = item.exact ? pathname === item.to : pathname.startsWith(item.to);
+                const active =
+                  item.to === "/app/subjects"
+                    ? [
+                        "/app/subject",
+                        "/app/ai-tutor",
+                        "/app/study-notebook",
+                        "/app/model-answers",
+                        "/app/practice",
+                        "/app/topics",
+                        "/app/generate",
+                      ].some((path) => pathname.startsWith(path))
+                    : item.exact
+                      ? pathname === item.to
+                      : pathname.startsWith(item.to);
                 const Icon = item.icon;
                 return (
                   <Link
@@ -268,9 +283,22 @@ function AppLayout() {
             <Outlet />
           </main>
 
-          <nav className="sticky bottom-0 z-10 grid grid-cols-5 border-t border-border bg-background/95 backdrop-blur md:hidden">
+          <nav className="sticky bottom-0 z-10 grid grid-cols-4 border-t border-border bg-background/95 backdrop-blur md:hidden">
             {MOBILE_NAV.map((item) => {
-              const active = item.exact ? pathname === item.to : pathname.startsWith(item.to);
+              const active =
+                item.to === "/app/subjects"
+                  ? [
+                      "/app/subject",
+                      "/app/ai-tutor",
+                      "/app/study-notebook",
+                      "/app/model-answers",
+                      "/app/practice",
+                      "/app/topics",
+                      "/app/generate",
+                    ].some((path) => pathname.startsWith(path))
+                  : item.exact
+                    ? pathname === item.to
+                    : pathname.startsWith(item.to);
               const Icon = item.icon;
               return (
                 <Link

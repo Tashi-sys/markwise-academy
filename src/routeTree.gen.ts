@@ -31,6 +31,7 @@ import { Route as AppClassroomRouteImport } from './routes/app.classroom'
 import { Route as AppAiTutorRouteImport } from './routes/app.ai-tutor'
 import { Route as AppPracticeIndexRouteImport } from './routes/app.practice.index'
 import { Route as AppTopicsSubjectRouteImport } from './routes/app.topics.$subject'
+import { Route as AppSubjectSubjectRouteImport } from './routes/app.subject.$subject'
 import { Route as AppQuestionIdRouteImport } from './routes/app.question.$id'
 import { Route as AppClassroomClassIdRouteImport } from './routes/app.classroom.$classId'
 import { Route as AppClassroomTaskClassIdRouteImport } from './routes/app.classroom-task.$classId'
@@ -149,6 +150,11 @@ const AppTopicsSubjectRoute = AppTopicsSubjectRouteImport.update({
   path: '/topics/$subject',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSubjectSubjectRoute = AppSubjectSubjectRouteImport.update({
+  id: '/subject/$subject',
+  path: '/subject/$subject',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppQuestionIdRoute = AppQuestionIdRouteImport.update({
   id: '/question/$id',
   path: '/question/$id',
@@ -213,6 +219,7 @@ export interface FileRoutesByFullPath {
   '/app/classroom-task/$classId': typeof AppClassroomTaskClassIdRoute
   '/app/classroom/$classId': typeof AppClassroomClassIdRouteWithChildren
   '/app/question/$id': typeof AppQuestionIdRoute
+  '/app/subject/$subject': typeof AppSubjectSubjectRoute
   '/app/topics/$subject': typeof AppTopicsSubjectRoute
   '/app/practice/': typeof AppPracticeIndexRoute
   '/app/classroom-assignment/$classId/$assignmentId': typeof AppClassroomAssignmentClassIdAssignmentIdRoute
@@ -243,6 +250,7 @@ export interface FileRoutesByTo {
   '/app/classroom-task/$classId': typeof AppClassroomTaskClassIdRoute
   '/app/classroom/$classId': typeof AppClassroomClassIdRouteWithChildren
   '/app/question/$id': typeof AppQuestionIdRoute
+  '/app/subject/$subject': typeof AppSubjectSubjectRoute
   '/app/topics/$subject': typeof AppTopicsSubjectRoute
   '/app/practice': typeof AppPracticeIndexRoute
   '/app/classroom-assignment/$classId/$assignmentId': typeof AppClassroomAssignmentClassIdAssignmentIdRoute
@@ -275,6 +283,7 @@ export interface FileRoutesById {
   '/app/classroom-task/$classId': typeof AppClassroomTaskClassIdRoute
   '/app/classroom/$classId': typeof AppClassroomClassIdRouteWithChildren
   '/app/question/$id': typeof AppQuestionIdRoute
+  '/app/subject/$subject': typeof AppSubjectSubjectRoute
   '/app/topics/$subject': typeof AppTopicsSubjectRoute
   '/app/practice/': typeof AppPracticeIndexRoute
   '/app/classroom-assignment/$classId/$assignmentId': typeof AppClassroomAssignmentClassIdAssignmentIdRoute
@@ -308,6 +317,7 @@ export interface FileRouteTypes {
     | '/app/classroom-task/$classId'
     | '/app/classroom/$classId'
     | '/app/question/$id'
+    | '/app/subject/$subject'
     | '/app/topics/$subject'
     | '/app/practice/'
     | '/app/classroom-assignment/$classId/$assignmentId'
@@ -338,6 +348,7 @@ export interface FileRouteTypes {
     | '/app/classroom-task/$classId'
     | '/app/classroom/$classId'
     | '/app/question/$id'
+    | '/app/subject/$subject'
     | '/app/topics/$subject'
     | '/app/practice'
     | '/app/classroom-assignment/$classId/$assignmentId'
@@ -369,6 +380,7 @@ export interface FileRouteTypes {
     | '/app/classroom-task/$classId'
     | '/app/classroom/$classId'
     | '/app/question/$id'
+    | '/app/subject/$subject'
     | '/app/topics/$subject'
     | '/app/practice/'
     | '/app/classroom-assignment/$classId/$assignmentId'
@@ -540,6 +552,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTopicsSubjectRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/subject/$subject': {
+      id: '/app/subject/$subject'
+      path: '/subject/$subject'
+      fullPath: '/app/subject/$subject'
+      preLoaderRoute: typeof AppSubjectSubjectRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/question/$id': {
       id: '/app/question/$id'
       path: '/question/$id'
@@ -634,6 +653,7 @@ interface AppRouteChildren {
   AppClassroomStreamClassIdRoute: typeof AppClassroomStreamClassIdRoute
   AppClassroomTaskClassIdRoute: typeof AppClassroomTaskClassIdRoute
   AppQuestionIdRoute: typeof AppQuestionIdRoute
+  AppSubjectSubjectRoute: typeof AppSubjectSubjectRoute
   AppTopicsSubjectRoute: typeof AppTopicsSubjectRoute
   AppPracticeIndexRoute: typeof AppPracticeIndexRoute
   AppClassroomAssignmentClassIdAssignmentIdRoute: typeof AppClassroomAssignmentClassIdAssignmentIdRoute
@@ -659,6 +679,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppClassroomStreamClassIdRoute: AppClassroomStreamClassIdRoute,
   AppClassroomTaskClassIdRoute: AppClassroomTaskClassIdRoute,
   AppQuestionIdRoute: AppQuestionIdRoute,
+  AppSubjectSubjectRoute: AppSubjectSubjectRoute,
   AppTopicsSubjectRoute: AppTopicsSubjectRoute,
   AppPracticeIndexRoute: AppPracticeIndexRoute,
   AppClassroomAssignmentClassIdAssignmentIdRoute:

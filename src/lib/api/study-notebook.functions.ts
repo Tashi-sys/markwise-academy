@@ -1,3 +1,5 @@
+import { subjectScopeSchema } from "../subjectScope";
+import { getSubjectSyllabusGrounding } from "./subject-syllabus";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { callMarkWiseAI, friendlyOpenAIError } from "./openai.server";
@@ -18,6 +20,7 @@ const notebookSchema = z.object({
 export const askStudyNotebook = createServerFn({ method: "POST" })
   .validator(
     z.object({
+      subjectScope: subjectScopeSchema.optional(),
       message: z.string(),
       mode: z.string(),
       requestedOutputType: z.enum(["notes", "summary", "flashcards", "mindmap", "quiz"]).optional(),
@@ -28,11 +31,14 @@ export const askStudyNotebook = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const fallback = sourceGroundedFallback(data.message, data.selectedSources);
     try {
+      const activeSyllabus = data.subjectScope
+        ? getSubjectSyllabusGrounding(data.subjectScope)
+        : undefined;
       const sourceContent = data.selectedSources.flatMap((source) => source.chunks).join("\n\n");
       const reply = await callMarkWiseAI({
         instructions: `You are generating revision resources for MarkWise. You must only use the provided subject, syllabus, topic, and source text. Do not switch subject. Do not create biology content unless the selected subject is Biology. If the selected subject is Chemistry, all output must be Chemistry. If the source text is about Electrolysis, the output must be about Electrolysis. If there is not enough information, say what is missing instead of inventing unrelated content.
 
-Summarise only the educational content from the provided source text. Ignore metadata such as exam board name, subject name, paper name, notebook title, file title, headings like 'demo notes', and labels like 'topic'. Do not create key terms, mind map nodes, or exam questions from metadata. Extract useful exam content, definitions, processes, markscheme-style phrases, common mistakes, and possible past-paper-style questions. Keep everything IGCSE-level, concise, and exam-focused. Return strict JSON only.
+Summarise only the educational content from the provided source text. Ignore metadata such as exam board name, subject name, paper name, notebook title, file title, headings like 'demo notes', and labels like 'topic'. Do not create key terms, mind map nodes, or exam questions from metadata. Extract useful exam content, definitions, processes, markscheme-style phrases, common mistakes, and possible past-paper-style questions. Use the qualification, subject, syllabus code, and topic outline in activeSyllabus when supplied. Keep everything at the selected GCSE or IGCSE level, concise, and exam-focused. Return strict JSON only.
 
 When the student asks for a mind map, follow this rule exactly: You are an expert IGCSE revision mind map creator. Create a useful concept map only from the provided educational source content. Ignore metadata, notebook titles, exam board names, subject names, paper names, source titles, generic headings, and labels. Extract real examinable concepts, processes, keywords, and relationships. Return strict JSON only. Do not include metadata words as nodes.
 
@@ -49,6 +55,7 @@ Return only valid JSON:
         format: "json",
         input: {
           endpoint: "/api/study-notebook-chat",
+          activeSyllabus,
           mode: data.mode,
           requestedOutputType: data.requestedOutputType,
           message: data.message,

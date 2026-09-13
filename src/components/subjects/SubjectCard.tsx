@@ -83,7 +83,7 @@ export function SubjectCard({
         />
       </div>
 
-      {id === "biology" && hasQuestions && (
+      {id === "biology" && (
         <div className="mt-4 grid grid-cols-3 gap-2 text-[10px] font-semibold text-muted-foreground opacity-0 transition group-hover:opacity-100">
           <span className="rounded-full bg-primary/10 px-2 py-1 text-primary">Practise</span>
           <span className="rounded-full bg-success/10 px-2 py-1 text-success">Get marks</span>
@@ -106,12 +106,12 @@ export function SubjectCard({
           </button>
         )}
 
-        {topicsHref && (isStudying || !onToggleStudying) && hasQuestions && (
+        {topicsHref && (isStudying || !onToggleStudying) && (
           <Link
             to={topicsHref}
             className="interactive-button inline-flex items-center gap-1 text-sm font-medium text-primary"
           >
-            Open topics <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+            Open subject <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
           </Link>
         )}
       </div>

@@ -1,21 +1,45 @@
+import { SubjectToolPage } from "../components/subjects/SubjectToolPage";
+import { subjectToolSearch, type SubjectScope, scopeSearch } from "../lib/subjectScope";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { generatePracticeQuestion } from "../lib/api/exam-training.functions";
 import { getTopicMeta, getTopicsForSubject } from "../data/topicsConfig";
 import { getMiniPaperSyllabus } from "../data/miniPaperConfig";
-import { getSubjectName } from "../data/syllabusConfig";
 import { useAuth } from "../lib/auth";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/generate")({
-  component: GenerateQuestion,
+  validateSearch: (search) => subjectToolSearch.parse(search),
+  component: ScopedPage,
 });
 
-function GenerateQuestion() {
+function ScopedPage() {
+  const search = Route.useSearch();
+  return (
+    <SubjectToolPage search={search}>
+      {(context, userId) => (
+        <GenerateQuestion
+          key={`${userId}:${context.key}:${search.view ?? ""}`}
+          context={context}
+          userId={userId}
+          view={search.view}
+        />
+      )}
+    </SubjectToolPage>
+  );
+}
+
+function GenerateQuestion({
+  context,
+}: {
+  context: SubjectScope;
+  userId: string;
+  view?: "notes" | "notebook";
+}) {
   const { user } = useAuth();
-  const [subject, setSubject] = useState(user?.selectedSubjects[0] ?? "biology");
-  const syllabus = user ? getMiniPaperSyllabus(subject, user.examBoard) : undefined;
+  const subject = context.subject;
+  const syllabus = getMiniPaperSyllabus(subject, context.examBoard);
   const papers = useMemo(() => syllabus?.papers ?? [], [syllabus]);
   const [paperId, setPaperId] = useState(papers[0]?.id ?? "mixed");
   const selectedPaper = papers.find((paper) => paper.id === paperId) ?? papers[0];
@@ -57,30 +81,12 @@ function GenerateQuestion() {
             ))}
           </select>
         </label>
-        <label className="text-sm font-medium">
+        <div className="text-sm font-medium">
           Subject
-          <select
-            value={subject}
-            onChange={(event) => {
-              const nextSubject = event.target.value;
-              const nextPaper = getMiniPaperSyllabus(nextSubject, user.examBoard)?.papers[0];
-              setSubject(nextSubject);
-              setPaperId(nextPaper?.id ?? "mixed");
-              setTopic(
-                nextPaper?.availableTopics?.[0] ??
-                  Object.keys(getTopicsForSubject(nextSubject))[0] ??
-                  "mixed",
-              );
-            }}
-            className="mt-2 w-full rounded-xl border border-input bg-background px-3 py-2"
-          >
-            {user.selectedSubjects.map((subjectId) => (
-              <option key={subjectId} value={subjectId}>
-                {getSubjectName(user.examBoard, subjectId)}
-              </option>
-            ))}
-          </select>
-        </label>
+          <p className="mt-2 rounded-xl border border-border bg-secondary/30 px-3 py-2">
+            {context.subjectName}
+          </p>
+        </div>
         <label className="text-sm font-medium">
           Paper
           <select
@@ -144,7 +150,8 @@ function GenerateQuestion() {
             try {
               const response = await generatePracticeQuestion({
                 data: {
-                  examBoard: user.examBoard,
+                  examBoard: context.examBoard,
+                  subjectScope: scopeSearch(context),
                   subject,
                   paper: selectedPaper?.label ?? "Mixed Practice",
                   paperType: selectedPaper?.paperType ?? "Mixed",

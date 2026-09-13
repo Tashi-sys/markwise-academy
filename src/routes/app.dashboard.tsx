@@ -23,7 +23,7 @@ import { buildStudyPlan, missedKeywords } from "../lib/examTraining";
 import { formatClassroomDate, getUpcomingAssignment, useClassroomHub } from "../lib/classroomHub";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
-import { canUseQuestion } from "../lib/userSyllabus";
+import { canUseQuestion, getUserSubjectSyllabuses } from "../lib/userSyllabus";
 import { markAnswer } from "../lib/marking";
 import {
   readPracticeSession,
@@ -48,6 +48,9 @@ type WeakTopicRow = {
 };
 
 type QuickSubject = {
+  key: string;
+  boardId: string;
+  qualification: string;
   subject: string;
   subjectName: string;
   examBoard: string;
@@ -158,25 +161,26 @@ function Dashboard() {
     : [];
 
   const recent = [...userAttempts].slice(-5).reverse();
-  const quickSubjects: QuickSubject[] = (
-    user.selectedSubjects.length ? user.selectedSubjects : ["physics", "chemistry", "biology"]
-  )
+  const quickSubjects: QuickSubject[] = getUserSubjectSyllabuses(user)
     .slice(0, 4)
-    .map((subjectId) => {
-      const topics = getTopicsWithQuestions(user.examBoard, subjectId, user.qualification);
-      const questions = filterQuestions({
-        qualification: user.qualification,
-        examBoard: user.examBoard,
-        subject: subjectId,
-      });
-      return {
-        subject: subjectId,
-        subjectName: getSubjectName(user.examBoard, subjectId),
-        examBoard: board?.name ?? user.examBoard,
-        topics: topics.length,
-        questions: questions.length,
-      };
-    });
+    .map((selection) => ({
+      key: selection.key,
+      subject: selection.subject,
+      subjectName: selection.subjectName,
+      examBoard: selection.boardName,
+      boardId: selection.examBoard,
+      qualification: selection.qualification,
+      topics: getTopicsWithQuestions(
+        selection.examBoard,
+        selection.subject,
+        selection.qualification,
+      ).length,
+      questions: filterQuestions({
+        examBoard: selection.examBoard,
+        subject: selection.subject,
+        qualification: selection.qualification,
+      }).length,
+    }));
   const questionOfTheDay =
     quickSubjects
       .flatMap((subject) =>
@@ -862,7 +866,7 @@ function QuickSubjectsSection({ subjects }: { subjects: QuickSubject[] }) {
       <div className="stagger-grid grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {subjects.map((subject) => (
           <div
-            key={subject.subject}
+            key={subject.key}
             className="interactive-card glass-card rounded-2xl border border-border bg-card p-4 shadow-soft"
           >
             <div className="flex items-start justify-between gap-3">
@@ -885,8 +889,9 @@ function QuickSubjectsSection({ subjects }: { subjects: QuickSubject[] }) {
               </div>
             </div>
             <Link
-              to="/app/topics/$subject"
+              to="/app/subject/$subject"
               params={{ subject: subject.subject }}
+              search={{ examBoard: subject.boardId, qualification: subject.qualification }}
               className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-semibold hover:border-primary/40 hover:text-primary"
             >
               Study <ArrowRight className="h-4 w-4" />

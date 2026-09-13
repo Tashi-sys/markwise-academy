@@ -1,16 +1,25 @@
+import { SubjectToolPage } from "../components/subjects/SubjectToolPage";
+import {
+  subjectToolSearch,
+  type SubjectScope,
+  matchesSubjectScope,
+  scopeSearch,
+  tutorStorageKey,
+} from "../lib/subjectScope";
 import { createFileRoute } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bot, MessageCircle, Plus, Send, Settings, Sparkles, User } from "lucide-react";
 import { askAITutor, getAISettingsStatus } from "../lib/api/ai-tutor.functions";
-import { getExamBoard, getSubjectName, getSubjectsForBoard } from "../data/syllabusConfig";
+import { getExamBoard } from "../data/syllabusConfig";
 import { getMiniPaperSyllabus } from "../data/miniPaperConfig";
 import { useAuth } from "../lib/auth";
 import { requestUserDataSync } from "../lib/userDataSync";
 import { useAttempts } from "../lib/storage";
 
 export const Route = createFileRoute("/app/ai-tutor")({
-  component: AITutorPage,
+  validateSearch: (search) => subjectToolSearch.parse(search),
+  component: ScopedPage,
 });
 
 type TutorMessage = {
@@ -26,14 +35,6 @@ type TutorChat = {
   updatedAt: number;
 };
 
-const CHAT_KEY = "markwise:ai-tutor-chats:v1";
-const LEGACY_CHAT_KEYS = [
-  "aiTutorMessages",
-  "tutorHistory",
-  "chatMessages",
-  "defaultTutorMessage",
-  "seededMessages",
-];
 const MODES = [
   "General Tutor",
   "Mark My Answer",
@@ -45,16 +46,37 @@ const MODES = [
 ];
 const NEUTRAL_STARTER =
   "Hi! I'm your MarkWise AI Tutor. Ask me to mark an answer, explain a topic, give keywords, or make a model answer.";
-const BAD_BIOLOGY_SEED_PATTERN =
-  /(cambridge igcse biology|biology paper 1|ecology weak topic|weak topic|aiming 8\/9|mcq-focused|food chains|population sampling|rapid-fire definitions|exam technique for paper 1 ecology)/i;
 
-function AITutorPage() {
+function ScopedPage() {
+  const search = Route.useSearch();
+  return (
+    <SubjectToolPage search={search}>
+      {(context, userId) => (
+        <AITutorPage
+          key={`${userId}:${context.key}:${search.view ?? ""}`}
+          context={context}
+          userId={userId}
+          view={search.view}
+        />
+      )}
+    </SubjectToolPage>
+  );
+}
+
+function AITutorPage({
+  context,
+  userId,
+}: {
+  context: SubjectScope;
+  userId: string;
+  view?: "notes" | "notebook";
+}) {
   const { user } = useAuth();
   const { attempts } = useAttempts();
-  const [chats, setChats] = useState<TutorChat[]>(() => readChats());
+  const storageKey = tutorStorageKey(userId, context);
+  const [chats, setChats] = useState<TutorChat[]>(() => readChats(storageKey));
   const [activeId, setActiveId] = useState(() => chats[0]?.id ?? "");
   const [mode, setMode] = useState(MODES[0]);
-  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [selectedTopic, setSelectedTopic] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -67,28 +89,23 @@ function AITutorPage() {
   const typingRef = useRef(false);
 
   const activeChat = chats.find((chat) => chat.id === activeId) ?? chats[0];
-  const selectedSubjectName =
-    user && selectedSubject ? getSubjectName(user.examBoard, selectedSubject) : null;
-  const mentionedSubject = inferSubjectFromMessage(message);
-  const subjectForContext = selectedSubjectName ?? mentionedSubject;
-  const syllabus =
-    user && selectedSubject ? getMiniPaperSyllabus(selectedSubject, user.examBoard) : undefined;
-  const board = user ? getExamBoard(user.examBoard) : undefined;
+  const subjectForContext = context.subjectName;
+  const syllabus = getMiniPaperSyllabus(context.subject, context.examBoard);
+  const board = getExamBoard(context.examBoard);
   const weakTopics = useMemo(() => {
     const low = attempts
-      .filter((attempt) => attempt.score / Math.max(1, attempt.total) < 0.65)
+      .filter(
+        (attempt) =>
+          matchesSubjectScope(attempt, context) &&
+          attempt.score / Math.max(1, attempt.total) < 0.65,
+      )
       .map((attempt) => attempt.topic);
     return [...new Set(low)].slice(0, 5);
-  }, [attempts]);
+  }, [attempts, context]);
 
   useEffect(() => {
-    if (!typingRef.current) saveChats(chats);
-  }, [chats]);
-
-  useEffect(() => {
-    clearLegacyTutorSeeds();
-    setChats((items) => scrubBadTutorSeeds(items));
-  }, []);
+    if (!typingRef.current) saveChats(chats, storageKey);
+  }, [chats, storageKey]);
 
   useEffect(() => {
     getAISettingsStatus().then(setSettings);
@@ -119,15 +136,18 @@ function AITutorPage() {
     updateChat(chat.id, { messages: nextMessages, title: titleFrom(text), mode });
 
     const intent = detectTutorIntent(text, mode);
-    const localReply = getLocalTutorReply({
-      intent,
-      text,
-      selectedSubject: subjectForContext,
-      selectedTopic: selectedTopic.trim() || inferTopicFromMessage(text),
-      profileSubjects: user.selectedSubjects.map((subject) => getSubjectName(user.examBoard, subject)),
-      weakestSubject: user.weakestSubject,
-      weakTopics,
-    });
+    const localReply =
+      intent === "choose-for-me"
+        ? ""
+        : getLocalTutorReply({
+            intent,
+            text,
+            selectedSubject: subjectForContext,
+            selectedTopic: selectedTopic.trim() || inferTopicFromMessage(text),
+            profileSubjects: [context.subjectName],
+            weakestSubject: context.subjectName,
+            weakTopics,
+          });
     if (localReply) {
       await revealAssistantReply(chat.id, nextMessages, localReply);
       return;
@@ -135,6 +155,7 @@ function AITutorPage() {
 
     const response = await askAITutor({
       data: {
+        subjectScope: scopeSearch(context),
         mode,
         selectedTutorMode: mode,
         userMessage: text,
@@ -142,23 +163,19 @@ function AITutorPage() {
         intent,
         chatHistory: nextMessages.slice(-10),
         studentProfile: {
-          examBoard: board?.name ?? user.examBoard,
+          examBoard: context.boardName,
           subject: subjectForContext ?? undefined,
           paper: subjectForContext ? syllabus?.papers[0]?.label : undefined,
           targetGrade: user.targetGrade,
-          userProfileSubjects: user.selectedSubjects.map((subject) =>
-            getSubjectName(user.examBoard, subject),
-          ),
+          userProfileSubjects: [context.subjectName],
           weakTopics: shouldUseWeakTopics(intent, mode) ? weakTopics : [],
         },
         tutorContext: {
           selectedTutorMode: mode,
-          selectedExamBoard: board?.name ?? user.examBoard,
+          selectedExamBoard: context.boardName,
           selectedSubject: subjectForContext,
           selectedTopic: selectedTopic.trim() || inferTopicFromMessage(text) || null,
-          userProfileSubjects: user.selectedSubjects.map((subject) =>
-            getSubjectName(user.examBoard, subject),
-          ),
+          userProfileSubjects: [context.subjectName],
           recentAttemptContext: shouldUseWeakTopics(intent, mode) ? { weakTopics } : {},
         },
         currentQuestionContext: {
@@ -176,7 +193,11 @@ function AITutorPage() {
     );
   };
 
-  const revealAssistantReply = async (chatId: string, baseMessages: TutorMessage[], fullReply: string) => {
+  const revealAssistantReply = async (
+    chatId: string,
+    baseMessages: TutorMessage[],
+    fullReply: string,
+  ) => {
     typingRef.current = true;
     setIsTyping(true);
     setLoading(false);
@@ -200,7 +221,7 @@ function AITutorPage() {
       setIsTyping(false);
       setStreamingMessageKey(null);
       setChats((items) => {
-        saveChats(items);
+        saveChats(items, storageKey);
         return items;
       });
     }
@@ -254,7 +275,7 @@ function AITutorPage() {
             </div>
             <h1 className="text-3xl font-bold tracking-tight">AI Tutor</h1>
             <p className="mt-1 text-muted-foreground">
-              GPT-powered IGCSE help for marking, keywords, model answers, and revision coaching.
+              Help with {context.subjectName} for {context.boardName} {context.syllabusCode}.
             </p>
           </div>
           <div className="hidden items-center gap-3 rounded-2xl border border-border bg-card/70 px-4 py-3 shadow-soft backdrop-blur md:flex">
@@ -282,21 +303,12 @@ function AITutorPage() {
                 ))}
               </select>
             </label>
-            <label className="tutor-field text-sm font-medium">
+            <div className="tutor-field text-sm font-medium">
               Subject
-              <select
-                value={selectedSubject ?? ""}
-                onChange={(event) => setSelectedSubject(event.target.value || null)}
-                className="mt-2 w-full rounded-xl border border-input bg-background px-3 py-2"
-              >
-                <option value="">No subject selected</option>
-                {getSubjectsForBoard(user.examBoard).map((subject) => (
-                  <option key={subject.id} value={subject.id}>
-                    {subject.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+              <p className="mt-2 rounded-xl border border-border bg-secondary/30 px-3 py-2">
+                {context.subjectName}
+              </p>
+            </div>
             <label className="tutor-field text-sm font-medium">
               Topic
               <input
@@ -330,48 +342,52 @@ function AITutorPage() {
                   <div className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-full bg-primary/10 text-primary">
                     <Bot className="h-5 w-5 animate-float-icon" />
                   </div>
-                  <div>{NEUTRAL_STARTER}</div>
+                  <div>
+                    Ask me about {context.subjectName} for {context.boardName}{" "}
+                    {context.syllabusCode}. I can explain a topic, help with an answer, or suggest
+                    practice.
+                  </div>
                 </div>
               </div>
             )}
             {activeChat?.messages.map((item, index) => {
               const messageKey = `${activeChat.id}:${index}`;
               return (
-              <div
-                key={`${item.role}-${index}`}
-                className={`animate-message-in tutor-message-row flex gap-3 ${
-                  item.role === "user" ? "justify-end" : "justify-start"
-                }`}
-                style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }}
-              >
-                {item.role === "assistant" && (
-                  <div className="tutor-avatar grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                    <Bot className="h-4 w-4" />
-                  </div>
-                )}
                 <div
-                  className={`tutor-message-bubble max-w-[92%] rounded-2xl px-4 py-3 text-sm leading-relaxed sm:max-w-[75%] ${
-                    item.role === "user"
-                      ? "tutor-message-user bg-primary text-primary-foreground"
-                      : "tutor-message-assistant border border-border bg-background text-foreground shadow-soft"
+                  key={`${item.role}-${index}`}
+                  className={`animate-message-in tutor-message-row flex gap-3 ${
+                    item.role === "user" ? "justify-end" : "justify-start"
                   }`}
+                  style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }}
                 >
-                  {item.role === "assistant" ? (
-                    <TutorMarkdown
-                      content={item.content}
-                      mode={mode}
-                      streaming={streamingMessageKey === messageKey}
-                    />
-                  ) : (
-                    item.content
+                  {item.role === "assistant" && (
+                    <div className="tutor-avatar grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                      <Bot className="h-4 w-4" />
+                    </div>
+                  )}
+                  <div
+                    className={`tutor-message-bubble max-w-[92%] rounded-2xl px-4 py-3 text-sm leading-relaxed sm:max-w-[75%] ${
+                      item.role === "user"
+                        ? "tutor-message-user bg-primary text-primary-foreground"
+                        : "tutor-message-assistant border border-border bg-background text-foreground shadow-soft"
+                    }`}
+                  >
+                    {item.role === "assistant" ? (
+                      <TutorMarkdown
+                        content={item.content}
+                        mode={mode}
+                        streaming={streamingMessageKey === messageKey}
+                      />
+                    ) : (
+                      item.content
+                    )}
+                  </div>
+                  {item.role === "user" && (
+                    <div className="tutor-avatar grid h-8 w-8 shrink-0 place-items-center rounded-full bg-secondary text-muted-foreground">
+                      <User className="h-4 w-4" />
+                    </div>
                   )}
                 </div>
-                {item.role === "user" && (
-                  <div className="tutor-avatar grid h-8 w-8 shrink-0 place-items-center rounded-full bg-secondary text-muted-foreground">
-                    <User className="h-4 w-4" />
-                  </div>
-                )}
-              </div>
               );
             })}
             {loading && (
@@ -444,7 +460,9 @@ function waitForTyping(chunk: string) {
   const sentencePause = /[.!?]\s*$/.test(chunk) ? 130 : 0;
   const linePause = chunk.includes("\n") ? 160 : 0;
   const lengthDelay = Math.min(95, Math.max(36, chunk.length * 5));
-  return new Promise((resolve) => window.setTimeout(resolve, lengthDelay + sentencePause + linePause));
+  return new Promise((resolve) =>
+    window.setTimeout(resolve, lengthDelay + sentencePause + linePause),
+  );
 }
 
 function TutorMarkdown({
@@ -767,7 +785,11 @@ function detectTutorIntent(message: string, mode: string): TutorIntent {
   if (/mark|grade|score|how many marks/.test(text) || mode === "Mark My Answer") return "marking";
   if (/model answer|sample answer|full[-\s]?mark answer/.test(text)) return "model-answer";
   if (/keyword|key word|definition/.test(text)) return "keyword";
-  if (/(choose|pick|decide|select).*(for me)|you choose|you pick|surprise me|anything is fine|what should i do/i.test(text)) {
+  if (
+    /(choose|pick|decide|select).*(for me)|you choose|you pick|surprise me|anything is fine|what should i do/i.test(
+      text,
+    )
+  ) {
     return "choose-for-me";
   }
   if (/revise|revision|plan|coach|weak|recommend/.test(text) || mode === "Weak Topic Coach") {
@@ -795,10 +817,11 @@ function getLocalTutorReply({
   weakTopics: string[];
 }) {
   if (intent === "greeting") {
-    return "Hey! What subject or question do you want help with today?";
+    return `Hi! What would you like to work on in ${selectedSubject ?? "this subject"}?`;
   }
   if (intent === "choose-for-me") {
-    const subject = selectedSubject || normaliseTutorChoice(weakestSubject) || profileSubjects[0] || "Chemistry";
+    const subject =
+      selectedSubject || normaliseTutorChoice(weakestSubject) || profileSubjects[0] || "Chemistry";
     const topic = selectedTopic || weakTopics[0] || defaultTopicForSubject(subject);
     return [
       `Alright, I\x27ll choose: **${subject} - ${topic}**.`,
@@ -867,43 +890,19 @@ function shouldUseWeakTopics(intent: TutorIntent, mode: string) {
   return intent === "revision-coaching" || mode === "Weak Topic Coach";
 }
 
-function scrubBadTutorSeeds(chats: TutorChat[]) {
-  return chats
-    .map((chat) => ({
-      ...chat,
-      messages: chat.messages.filter((message) => !BAD_BIOLOGY_SEED_PATTERN.test(message.content)),
-    }))
-    .filter((chat) => chat.messages.length > 0 || !BAD_BIOLOGY_SEED_PATTERN.test(chat.title));
-}
-
-function clearLegacyTutorSeeds() {
-  if (typeof window === "undefined") return;
-  for (const key of LEGACY_CHAT_KEYS) {
-    window.localStorage.removeItem(key);
-  }
-  const raw = window.localStorage.getItem(CHAT_KEY);
-  if (!raw || !BAD_BIOLOGY_SEED_PATTERN.test(raw)) return;
-  try {
-    const chats = JSON.parse(raw) as TutorChat[];
-    window.localStorage.setItem(CHAT_KEY, JSON.stringify(scrubBadTutorSeeds(chats)));
-  } catch {
-    window.localStorage.removeItem(CHAT_KEY);
-  }
-}
-
-function readChats(): TutorChat[] {
+function readChats(storageKey: string): TutorChat[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(CHAT_KEY);
-    return raw ? scrubBadTutorSeeds(JSON.parse(raw) as TutorChat[]) : [];
+    const raw = window.localStorage.getItem(storageKey);
+    return raw ? (JSON.parse(raw) as TutorChat[]) : [];
   } catch {
     return [];
   }
 }
 
-function saveChats(chats: TutorChat[]) {
+function saveChats(chats: TutorChat[], storageKey: string) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(CHAT_KEY, JSON.stringify(chats.slice(0, 20)));
+  window.localStorage.setItem(storageKey, JSON.stringify(chats));
   window.dispatchEvent(new Event("markwise:ai-tutor-chats:changed"));
   requestUserDataSync();
 }

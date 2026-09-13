@@ -119,11 +119,7 @@ function SubjectsPage() {
               hasQuestions={hasQuestions}
               onToggleStudying={() => toggleStudying(s)}
               toggleLabel={saving === s.key ? "Saving..." : undefined}
-              topicsHref={
-                isStudying && hasQuestions
-                  ? "/app/topics/" + s.id + "?" + query.toString()
-                  : undefined
-              }
+              topicsHref={isStudying ? "/app/subject/" + s.id + "?" + query.toString() : undefined}
             />
           );
         })}
