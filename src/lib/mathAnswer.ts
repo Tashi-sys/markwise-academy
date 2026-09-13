@@ -13,6 +13,9 @@ export function isMathsSubject(subject: string) {
 /** Make common maths notation searchable by the existing keyword marker. */
 export function normaliseMathAnswer(value: string) {
   return value
+    .replace(/\\(?:left|right)/g, "")
+    .replace(/\\(?:text|mathrm)\{([^{}]*)\}/g, "$1")
+    .replace(/\\dfrac/g, "\\frac")
     .replace(/\\frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, "$1/$2")
     .replace(/\\sqrt\s*\{([^{}]*)\}/g, "sqrt $1")
     .replace(/\^\{([^{}]*)\}/g, "^$1")

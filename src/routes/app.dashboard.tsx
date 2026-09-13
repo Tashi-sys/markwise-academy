@@ -24,11 +24,8 @@ import { formatClassroomDate, getUpcomingAssignment, useClassroomHub } from "../
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import { canUseQuestion, getUserSubjectSyllabuses } from "../lib/userSyllabus";
-import { markAnswer } from "../lib/marking";
 import {
   readPracticeSession,
-  savePracticeQuestionState,
-  startPracticeSession,
   subscribePracticeSession,
   type PracticeMode,
   type PracticeSession,
@@ -202,10 +199,6 @@ function Dashboard() {
     practiceSession?.userId === user.id && savedQuestion && canUseQuestion(user, savedQuestion)
       ? practiceSession
       : null;
-  const lastAttempt = [...attempts].reverse().find((attempt) => {
-    const question = getQuestion(attempt.questionId);
-    return question && canUseQuestion(user, question);
-  });
   const continueStudy = activeSession
     ? (() => {
         const answered = Object.values(activeSession.questionStates)
@@ -231,64 +224,7 @@ function Dashboard() {
           onResume: undefined,
         };
       })()
-    : lastAttempt
-      ? (() => {
-          const lastQuestion = getQuestion(lastAttempt.questionId)!;
-          const topicAttempts = attempts.filter(
-            (attempt) =>
-              attempt.subject === lastAttempt.subject &&
-              attempt.topic === lastAttempt.topic &&
-              attempt.examBoard === lastAttempt.examBoard &&
-              attempt.qualification === lastAttempt.qualification,
-          );
-          const topicTotalScore = topicAttempts.reduce((sum, attempt) => sum + attempt.score, 0);
-          const topicTotalMarks = topicAttempts.reduce((sum, attempt) => sum + attempt.total, 0);
-          const topicQuestionCount = filterQuestions({
-            qualification: lastQuestion.qualification,
-            examBoard: lastQuestion.examBoard,
-            subject: lastAttempt.subject,
-            topic: lastAttempt.topic,
-          }).length;
-          const completedQuestions = topicAttempts.length;
-
-          return {
-            subject: lastAttempt.subject,
-            subjectName: getSubjectName(lastQuestion.examBoard, lastAttempt.subject),
-            examBoard: getExamBoard(lastQuestion.examBoard)?.name ?? lastQuestion.examBoard,
-            examBoardId: lastQuestion.examBoard,
-            qualification: lastQuestion.qualification,
-            topic: lastAttempt.topic,
-            topicName: getTopicMeta(lastAttempt.subject, lastAttempt.topic).name,
-            questionId: lastAttempt.questionId,
-            mode: "practice" as const,
-            completedQuestions,
-            totalQuestions: topicQuestionCount || Math.max(100, completedQuestions),
-            accuracy:
-              topicTotalMarks > 0 ? Math.round((topicTotalScore / topicTotalMarks) * 100) : 0,
-            completion: topicQuestionCount
-              ? Math.min(100, Math.round((completedQuestions / topicQuestionCount) * 100))
-              : Math.min(100, completedQuestions),
-            finished: false,
-            onResume: () => {
-              const pool = filterQuestions({
-                qualification: lastQuestion.qualification,
-                examBoard: lastQuestion.examBoard,
-                subject: lastQuestion.subject,
-                topic: lastQuestion.topic,
-              });
-              const session = startPracticeSession(user.id, pool, "practice", lastQuestion.id);
-              const result = markAnswer(lastQuestion, lastAttempt.answer);
-              savePracticeQuestionState(user.id, session.id, lastQuestion.id, {
-                answer: lastAttempt.answer,
-                hintsShown: 0,
-                elapsed: lastAttempt.elapsedSeconds ?? 0,
-                result: { ...result, score: lastAttempt.score, total: lastAttempt.total },
-                firstScore: { score: lastAttempt.score, total: lastAttempt.total },
-              });
-            },
-          };
-        })()
-      : null;
+    : null;
   const plan = buildStudyPlan(userAttempts);
   const missed = missedKeywords(userAttempts);
   const recentMistakes = userAttempts

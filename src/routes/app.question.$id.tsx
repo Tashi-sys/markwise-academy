@@ -117,7 +117,11 @@ function PracticeQuestion({
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [nextLoading, setNextLoading] = useState(false);
   const navigationPending = useRef(false);
-  const setAnswer = (value: string) => setState((current) => ({ ...current, answer: value }));
+  const setAnswer = (value: string) => {
+    const next = { ...state, answer: value };
+    if (sessionId) savePracticeQuestionState(userId, sessionId, question.id, next);
+    setState(next);
+  };
 
   useEffect(() => {
     const session = ensurePracticeSession(

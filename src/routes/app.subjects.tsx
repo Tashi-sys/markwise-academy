@@ -1,10 +1,18 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Plus } from "lucide-react";
 import { useState } from "react";
 import type { Qualification } from "../data/syllabusConfig";
 import { useAuth, updateUserProfile, type SubjectSyllabusSelection } from "../lib/auth";
 import { EXAM_BOARDS, getSyllabusCode } from "../data/syllabusConfig";
 import { subjectHasQuestions } from "../data/questionBank";
+import { SubjectPicker } from "../components/subjects/SubjectPicker";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "../components/ui/dialog";
 import { SubjectCard } from "../components/subjects/SubjectCard";
 import { getUserSubjectSyllabuses, selectionKey } from "../lib/userSyllabus";
 
@@ -30,6 +38,7 @@ const ALL_SUBJECT_OPTIONS = EXAM_BOARDS.flatMap((board) =>
 
 function SubjectsPage() {
   const { user, refresh } = useAuth();
+  const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
   const [qualificationFilter, setQualificationFilter] = useState<"all" | Qualification>("all");
 
@@ -37,10 +46,11 @@ function SubjectsPage() {
 
   const userSelections = getUserSubjectSyllabuses(user);
   const studying = new Set(userSelections.map((selection) => selection.key));
+  const mySubjects = ALL_SUBJECT_OPTIONS.filter((option) => studying.has(option.key));
   const visibleSubjectOptions =
     qualificationFilter === "all"
-      ? ALL_SUBJECT_OPTIONS
-      : ALL_SUBJECT_OPTIONS.filter((option) => option.qualification === qualificationFilter);
+      ? mySubjects
+      : mySubjects.filter((option) => option.qualification === qualificationFilter);
 
   const saveSelections = (selections: SubjectSyllabusSelection[]) => {
     const selectedSubjects = [...new Set(selections.map((selection) => selection.subject))];
@@ -68,13 +78,38 @@ function SubjectsPage() {
   return (
     <div className="animate-enter space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Your STEM subjects</h1>
+        <h1 className="text-3xl font-bold tracking-tight">My Subjects</h1>
         <p className="mt-1 text-muted-foreground">
-          Select maths, sciences, and computer science from your syllabus. Each card opens only the
-          questions for that exact board.
+          Your selected subjects, with study tools matched to each syllabus.
         </p>
       </div>
 
+      <button
+        type="button"
+        onClick={() => setAdding(true)}
+        className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground"
+      >
+        <Plus className="h-4 w-4" />
+        Add new subject
+      </button>
+      <Dialog open={adding} onOpenChange={setAdding}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add subjects</DialogTitle>
+            <DialogDescription>
+              Choose an exam board, then select the subjects you study.
+            </DialogDescription>
+          </DialogHeader>
+          <SubjectPicker selections={userSelections} onChange={saveSelections} />
+          <button
+            type="button"
+            onClick={() => setAdding(false)}
+            className="rounded-full bg-primary px-4 py-2 text-primary-foreground"
+          >
+            Done
+          </button>
+        </DialogContent>
+      </Dialog>
       <div className="flex flex-wrap gap-2">
         {(["all", "IGCSE", "GCSE"] as const).map((filter) => (
           <button
@@ -129,7 +164,7 @@ function SubjectsPage() {
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
           <BookOpen className="mx-auto h-8 w-8 text-muted-foreground" />
           <p className="mt-3 text-sm text-muted-foreground">
-            Select at least one subject above to start practising.
+            Use Add new subject to choose your first subject and start practising.
           </p>
           <Link
             to="/app/profile"

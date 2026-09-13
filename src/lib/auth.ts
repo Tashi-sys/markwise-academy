@@ -14,6 +14,7 @@ export type UserProfile = {
   id: string;
   name: string;
   email: string;
+  role?: "student" | "teacher";
   qualification: Qualification;
   examBoard: ExamBoardId;
   selectedSubjects: string[];
@@ -56,7 +57,7 @@ const ALLOWED_EMAIL_TLDS = new Set([
   "io",
 ]);
 
-export function validateEmailAddress(value: string) {
+export function validateEmailAddress(value: string): { ok: true } | { ok: false; error: string } {
   const email = value.trim().toLowerCase();
   const basic = new RegExp("^[a-z0-9.!#$%&'*+/=?^_{|}~-]+@[a-z0-9-]+(?:\\.[a-z0-9-]+)+$").test(
     email,
@@ -101,6 +102,7 @@ function publicUserProfile(user: UserProfile) {
     id: user.id,
     name: user.name,
     email: user.email,
+    role: user.role ?? "student",
     qualification: user.qualification,
     examBoard: user.examBoard,
     selectedSubjects: user.selectedSubjects,
@@ -176,10 +178,11 @@ function normaliseUser(user: StoredUser): StoredUser {
   );
   return {
     ...user,
+    role: user.role === "teacher" ? "teacher" : "student",
     subjectSyllabuses,
     selectedSubjects: [...new Set(subjectSyllabuses.map((selection) => selection.subject))],
     weakestSubject:
-      user.weakestSubject && isStemSubject(user.weakestSubject) ? user.weakestSubject : undefined,
+      user.weakestSubject && isStemSubject(user.weakestSubject) ? user.weakestSubject : "",
   };
 }
 
@@ -199,6 +202,7 @@ export function isAuthenticated(): boolean {
 export type SignupInput = {
   name: string;
   email: string;
+  role?: "student" | "teacher";
   password: string;
   qualification: Qualification;
   examBoard: ExamBoardId;
@@ -231,6 +235,7 @@ export function signup(input: SignupInput): AuthResult {
     name: input.name.trim(),
     email,
     password: input.password,
+    role: input.role === "teacher" ? "teacher" : "student",
     qualification: input.qualification,
     examBoard: input.examBoard,
     selectedSubjects: input.selectedSubjects,

@@ -5,7 +5,7 @@ import { AuthError, AuthField, AuthLayout, authInputClass } from "../components/
 import { getCurrentUser, signup, validateEmailAddress } from "../lib/auth";
 import type { ExamBoardId, Qualification } from "../data/syllabusConfig";
 import { EXAM_BOARDS, getExamBoard } from "../data/syllabusConfig";
-import { subjectHasQuestions } from "../data/questionBank";
+import { SubjectPicker } from "../components/subjects/SubjectPicker";
 
 function safeRedirectTarget(value: unknown) {
   return typeof value === "string" && value.startsWith("/app") ? value : "/app/dashboard";
@@ -58,7 +58,7 @@ function SignupPage() {
   const [qualification, setQualification] = useState<Qualification>("IGCSE");
   const [examBoard, setExamBoard] = useState<ExamBoardId>("cambridge-igcse");
   const [selectedSubjectKeys, setSelectedSubjectKeys] = useState<string[]>([]);
-  const [subjectQualificationFilter, setSubjectQualificationFilter] = useState<"all" | Qualification>("all");
+  const [role, setRole] = useState<"student" | "teacher">("student");
   const [targetGrade, setTargetGrade] = useState("8/9");
   const [weakestSubject, setWeakestSubject] = useState("biology");
   const [preferredPracticeMode, setPreferredPracticeMode] = useState<"practice" | "exam" | "mixed">(
@@ -75,33 +75,13 @@ function SignupPage() {
     [selectedSubjectKeys],
   );
   const selectedBoardNames = useMemo(
-    () => [...new Set(selectedOptions.map((option) => getExamBoard(option.examBoard)?.name ?? option.boardName))],
+    () => [
+      ...new Set(
+        selectedOptions.map((option) => getExamBoard(option.examBoard)?.name ?? option.boardName),
+      ),
+    ],
     [selectedOptions],
   );
-  const visibleSubjectOptions = useMemo(
-    () =>
-      subjectQualificationFilter === "all"
-        ? SIGNUP_SUBJECT_OPTIONS
-        : SIGNUP_SUBJECT_OPTIONS.filter((option) => option.qualification === subjectQualificationFilter),
-    [subjectQualificationFilter],
-  );
-
-  const toggleSubject = (option: SignupSubjectOption) => {
-    setSelectedSubjectKeys((prev) => {
-      const next = prev.includes(option.key)
-        ? prev.filter((key) => key !== option.key)
-        : [...prev, option.key];
-      const nextFirst = next
-        .map((key) => SIGNUP_SUBJECT_OPTIONS.find((item) => item.key === key))
-        .find(Boolean);
-
-      setExamBoard(nextFirst?.examBoard ?? option.examBoard);
-      setQualification(nextFirst?.qualification ?? option.qualification);
-      setWeakestSubject(nextFirst?.id ?? option.id);
-      return next;
-    });
-  };
-
   const nextStep = () => {
     setError("");
     if (step === 0) {
@@ -127,6 +107,7 @@ function SignupPage() {
       name,
       email,
       password,
+      role,
       qualification: primary?.qualification ?? qualification,
       examBoard: primary?.examBoard ?? examBoard,
       selectedSubjects: [...new Set(selectedOptions.map((option) => option.id))],
@@ -154,7 +135,11 @@ function SignupPage() {
       footer={
         <>
           Already have an account?{" "}
-          <Link to="/login" search={{ redirect: redirectTo }} className="font-medium text-primary hover:underline">
+          <Link
+            to="/login"
+            search={{ redirect: redirectTo }}
+            className="font-medium text-primary hover:underline"
+          >
             Log in
           </Link>
         </>
@@ -184,6 +169,25 @@ function SignupPage() {
 
         {step === 0 && (
           <>
+            <AuthField label="I am joining as">
+              <div className="flex gap-4">
+                {(["student", "teacher"] as const).map((item) => (
+                  <label
+                    key={item}
+                    className="flex items-center gap-2 rounded-xl border border-border p-3 capitalize"
+                  >
+                    <input
+                      type="radio"
+                      name="role"
+                      value={item}
+                      checked={role === item}
+                      onChange={() => setRole(item)}
+                    />
+                    {item}
+                  </label>
+                ))}
+              </div>
+            </AuthField>
             <AuthField label="Full name">
               <input
                 type="text"
@@ -265,62 +269,31 @@ function SignupPage() {
               label="Subjects studied"
               hint="You can select subjects from different syllabuses. Each one keeps the syllabus shown in brackets."
             >
-              <div className="mb-3 flex flex-wrap gap-2">
-                {(["all", "IGCSE", "GCSE"] as const).map((filter) => (
-                  <button
-                    key={filter}
-                    type="button"
-                    onClick={() => setSubjectQualificationFilter(filter)}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                      subjectQualificationFilter === filter
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-background text-muted-foreground hover:bg-secondary"
-                    }`}
-                  >
-                    {filter === "all" ? "All subjects" : filter}
-                  </button>
-                ))}
-              </div>
-              <div className="max-h-72 space-y-1 overflow-y-auto rounded-lg border border-border bg-background p-2">
-                {visibleSubjectOptions.map((subject) => {
-                  const checked = selectedSubjectKeys.includes(subject.key);
-                  const hasQuestions = subjectHasQuestions(
-                    subject.examBoard,
-                    subject.id,
-                    subject.qualification,
+              <SubjectPicker
+                selections={selectedOptions.map((option) => ({
+                  subject: option.id,
+                  examBoard: option.examBoard,
+                  qualification: option.qualification,
+                }))}
+                onChange={(selections) => {
+                  setSelectedSubjectKeys(
+                    selections.map((item) => `${item.examBoard}:${item.subject}`),
                   );
-
-                  return (
-                    <label
-                      key={subject.key}
-                      className={`flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-2 text-sm transition ${
-                        checked ? "bg-primary/10 text-primary" : "hover:bg-secondary"
-                      }`}
-                    >
-                      <span className="flex min-w-0 items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleSubject(subject)}
-                          className="rounded border-border"
-                        />
-                        <span className="truncate">
-                          {subject.name} ({subject.qualification} · {subject.boardName})
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-[10px] text-muted-foreground">
-                        {hasQuestions ? "Past papers" : "No papers"}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
+                  const first = selections[0];
+                  if (first) {
+                    setExamBoard(first.examBoard);
+                    setQualification(first.qualification);
+                    setWeakestSubject(first.subject);
+                  }
+                }}
+              />
             </AuthField>
 
             {selectedOptions.length > 0 && (
               <div className="rounded-lg border border-border bg-secondary/40 p-3 text-sm text-muted-foreground">
-                Saved selections: <strong className="text-foreground">{selectedOptions.length}</strong>{" "}
-                subject{selectedOptions.length === 1 ? "" : "s"} across {selectedBoardNames.join(", ")}.
+                Saved selections:{" "}
+                <strong className="text-foreground">{selectedOptions.length}</strong> subject
+                {selectedOptions.length === 1 ? "" : "s"} across {selectedBoardNames.join(", ")}.
               </div>
             )}
           </>
@@ -341,7 +314,11 @@ function SignupPage() {
             disabled={loading}
             className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-primary py-2.5 text-sm font-semibold text-primary-foreground shadow-glow hover:bg-primary/90 disabled:opacity-60"
           >
-            {loading ? "Creating account..." : step === STEPS.length - 1 ? "Create account" : "Continue"}
+            {loading
+              ? "Creating account..."
+              : step === STEPS.length - 1
+                ? "Create account"
+                : "Continue"}
             {step < STEPS.length - 1 && !loading && <ArrowRight className="h-4 w-4" />}
           </button>
         </div>

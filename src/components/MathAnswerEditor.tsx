@@ -1,18 +1,19 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { MathfieldElement } from "mathlive";
+import "mathlive/fonts.css";
 import { isMathsSubject } from "../lib/mathAnswer";
 
 const SYMBOLS = [
-  ["x/y", "\\frac{}{}"],
-  ["x²", "^{2}"],
-  ["√x", "\\sqrt{}"],
-  ["±", "\\pm"],
-  ["×", "\\times"],
-  ["÷", "\\div"],
-  ["≤", "\\le"],
-  ["≥", "\\ge"],
-  ["π", "\\pi"],
-  ["∞", "\\infty"],
-  ["( )", "()"],
+  ["Fraction", "x/y", "\\frac{#0}{#?}"],
+  ["Square", "x²", "#0^{2}"],
+  ["Power", "xⁿ", "#0^{#?}"],
+  ["Square root", "√x", "\\sqrt{#0}"],
+  ["Plus or minus", "±", "\\pm"],
+  ["Multiply", "×", "\\times"],
+  ["Divide", "÷", "\\div"],
+  ["Equals", "=", "="],
+  ["Pi", "π", "\\pi"],
+  ["Brackets", "( )", "\\left(#0\\right)"],
 ] as const;
 
 export function MathAnswerEditor({
@@ -26,57 +27,99 @@ export function MathAnswerEditor({
   disabled?: boolean;
   resetKey?: string;
 }) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-  const lastKey = useRef(resetKey);
+  const host = useRef<HTMLDivElement>(null);
+  const field = useRef<MathfieldElement | null>(null);
+  const current = useRef({ value, onChange, disabled });
+  current.current = { value, onChange, disabled };
+  const [status, setStatus] = useState<"loading" | "ready" | "fallback">("loading");
   useEffect(() => {
-    lastKey.current = resetKey;
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+    import("mathlive")
+      .then(({ MathfieldElement }) => {
+        if (cancelled || !host.current) return;
+        MathfieldElement.fontsDirectory = null;
+        MathfieldElement.soundsDirectory = null;
+        const editor = new MathfieldElement();
+        editor.value = current.current.value;
+        editor.readOnly = current.current.disabled;
+        editor.smartMode = true;
+        editor.mathVirtualKeyboardPolicy = "manual";
+        editor.setAttribute("aria-label", "Your mathematical answer");
+        editor.style.cssText =
+          "display:block;width:100%;min-height:140px;padding:20px;background:transparent;color:inherit;border:0;font-size:24px;--caret-color:currentColor;--selection-background-color:#4985ff40;";
+        const input = () => current.current.onChange(editor.value);
+        editor.addEventListener("input", input);
+        host.current.replaceChildren(editor);
+        field.current = editor;
+        setStatus("ready");
+        cleanup = () => {
+          editor.removeEventListener("input", input);
+          editor.remove();
+          field.current = null;
+        };
+      })
+      .catch(() => {
+        if (!cancelled) setStatus("fallback");
+      });
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
   }, [resetKey]);
-  const insert = (symbol: string) => {
-    const textarea = ref.current;
-    if (!textarea || disabled) return;
-    const start = textarea.selectionStart ?? value.length;
-    const end = textarea.selectionEnd ?? value.length;
-    const next = `${value.slice(0, start)}${symbol}${value.slice(end)}`;
-    onChange(next);
-    requestAnimationFrame(() => {
-      textarea.focus();
-      const cursor = start + symbol.length;
-      textarea.setSelectionRange(cursor, cursor);
-    });
-  };
+  useEffect(() => {
+    if (field.current && field.current.value !== value)
+      field.current.setValue(value, { silenceNotifications: true });
+  }, [value]);
+  useEffect(() => {
+    if (field.current) field.current.readOnly = disabled;
+  }, [disabled]);
   return (
-    <div className="mt-6 overflow-hidden rounded-2xl border border-input bg-background shadow-inner focus-within:ring-2 focus-within:ring-primary/30">
-      <textarea
-        ref={ref}
-        aria-label="Your mathematical answer"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        disabled={disabled}
-        placeholder="Type your working, or use the maths buttons below…"
-        rows={8}
-        className="w-full resize-y border-0 bg-transparent px-4 py-3 text-sm leading-relaxed outline-none placeholder:text-muted-foreground disabled:opacity-70"
-      />
-      <div
-        className="flex flex-wrap gap-1 border-t border-border bg-secondary/60 p-2"
-        aria-label="Maths symbols"
-      >
-        {SYMBOLS.map(([label, symbol]) => (
-          <button
-            key={label}
-            type="button"
-            disabled={disabled}
-            onClick={() => insert(symbol)}
-            className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-primary/10 disabled:opacity-50"
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <p className="px-3 pb-2 text-xs text-muted-foreground">
-        Use ^ for powers and / for fractions. Maths answers do not need a word target.
+    <div className="mt-6 overflow-hidden rounded-2xl border border-input bg-background focus-within:ring-2 focus-within:ring-primary/30">
+      <div ref={host} />
+      {status === "loading" && (
+        <p className="p-4 text-sm text-muted-foreground">Loading maths editor…</p>
+      )}
+      {status === "fallback" && (
+        <textarea
+          aria-label="Your mathematical answer"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          disabled={disabled}
+          rows={6}
+          className="w-full bg-transparent p-4"
+          placeholder="Type your answer using / for fractions and ^ for powers"
+        />
+      )}
+      {status === "ready" && (
+        <div
+          className="flex flex-wrap gap-2 border-t border-border bg-secondary/40 p-3"
+          aria-label="Maths symbols"
+        >
+          {SYMBOLS.map(([name, label, latex]) => (
+            <button
+              key={name}
+              type="button"
+              title={name}
+              aria-label={name}
+              disabled={disabled}
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => {
+                field.current?.focus();
+                field.current?.insert(latex, { selectionMode: "placeholder" });
+              }}
+              className="min-w-10 rounded-lg border border-border bg-card px-3 py-2 hover:bg-primary/10 disabled:opacity-50"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      <p className="p-3 text-xs text-muted-foreground">
+        Use the arrow keys or Tab to move through fractions and roots. You can type words to explain
+        your working.
       </p>
     </div>
   );
 }
-
 export { isMathsSubject };
